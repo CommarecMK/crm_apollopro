@@ -1,0 +1,22 @@
+# Tajné údaje – NIKDY do gitu
+.env
+*.env
+*.key
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Lokální databáze
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

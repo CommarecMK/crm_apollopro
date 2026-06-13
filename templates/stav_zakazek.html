@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:18px">Stav zakázek</h1>
+
+{% if not souhrn.clockify_ok %}
+<div class="note">
+  <b>Clockify zatím nenapojený.</b> Hodiny se zobrazí jako 0. Nastav proměnnou
+  <code>CLOCKIFY_API_KEY</code> v souboru <code>.env</code> a obnov stránku.
+</div>
+{% endif %}
+
+<div class="stats">
+  <div class="stat"><div class="num">{{ souhrn.pocet }}</div><div class="lbl">Zakázek</div></div>
+  <div class="stat"><div class="num">{{ souhrn.pocet_firem }}</div><div class="lbl">Firem</div></div>
+  <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin {{ rok }} (Clockify)</div></div>
+</div>
+
+<form class="filters" method="get">
+  <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo zkratku…">
+  <select name="typ">
+    <option value="">Všechny typy služeb</option>
+    {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t==f_typ }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select name="stav">
+    <option value="">Všechny stavy</option>
+    {% for s in ['aktivni','pozastaveno','dokonceno'] %}
+      <option value="{{ s }}" {{ 'selected' if s==f_stav }}>{{ s|capitalize }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Filtrovat</button>
+  <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Zrušit</a>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Zakázka</th><th>Firma</th><th>Typ</th>
+      <th style="text-align:right">Hodiny {{ rok }}</th><th>Stav / riziko</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for z in zakazky %}
+    <tr>
+      <td><div>{{ z.nazev }}</div><div class="code">{{ z.zkratka }}</div></td>
+      <td>{{ z.firma.nazev }}</td>
+      <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+      <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>
+      <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="muted" style="font-size:12px;margin-top:14px">
+  Návrh ke kontrole. Hodiny z Clockify za rok {{ rok }}. Rozpočty hodin doplníme z nabídek ve fázi 2.
+</p>
+{% endblock %}

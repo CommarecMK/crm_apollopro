@@ -1,14 +1,13 @@
 """
-extensions.py — sdílené instance (db) a env proměnné.
-Importuje se všude — nevytváří Flask app.
+extensions.py — sdílené instance a env proměnné. Nevytváří Flask app.
 """
 import os
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-# ─── Env proměnné ─────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-FREELO_API_KEY    = os.environ.get("FREELO_API_KEY", "")
-FREELO_EMAIL      = os.environ.get("FREELO_EMAIL", "")
-FREELO_PROJECT_ID = os.environ.get("FREELO_PROJECT_ID", "501350")
+# ─── Env proměnné ───────────────────────────────────────────────
+ADMIN_PASSWORD        = os.environ.get("ADMIN_PASSWORD", "admin")
+CLOCKIFY_API_KEY      = os.environ.get("CLOCKIFY_API_KEY", "")
+CLOCKIFY_WORKSPACE_ID = os.environ.get("CLOCKIFY_WORKSPACE_ID", "")
+ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")

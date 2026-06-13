@@ -1,185 +1,84 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}Zápisy{% endblock %} — Commarec</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  /* === COMMAREC BRAND COLORS === */
-  /* Navy palette */
-  --navy:       #173767;   /* primary navy #173767 RGB 23/55/103 */
-  --navy-dark:  #0E213E;   /* dark navy #0E213E RGB 14/33/62 */
-  --navy-black: #050B15;   /* near-black #050B15 RGB 5/11/21 */
-  --navy-mid:   #254f8a;   /* mid navy for hover states */
-  /* Cyan palette */
-  --cyan:       #00AFF0;   /* primary cyan #00AFF0 RGB 0/175/240 */
-  --cyan-dark:  #008ABD;   /* secondary cyan #008ABD RGB 0/138/189 */
-  --cyan-bg:    #E0F5FD;   /* light cyan background */
-  /* UI colors */
-  --white:      #FFFFFF;
-  --bg:         #F0F3F7;
-  --surface:    #FFFFFF;
-  --border:     #D0DAE8;
-  --text:       #0E213E;
-  --muted:      #4A6080;
-  --success:    #0A7A5A;
-  --success-bg: #E2F5EE;
-  --danger:     #C0392B;
-  --danger-bg:  #FCEAEA;
-  --radius:     6px;
-  --font-display: 'Montserrat', sans-serif;
-  --font-body:    'Montserrat', sans-serif;
-}
-body { font-family: var(--font-body); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
-a { color: var(--blue); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-/* NAV */
-.nav {
-  background: #173767;
-  border-bottom: 3px solid #00AFF0;
-  padding: 0 2rem;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.nav-logo-svg { display: block; }
-.nav-logo-name {
-  font-family: var(--font-body);
-  font-size: 15px; font-weight: 800;
-  color: white; letter-spacing: 0.08em;
-  line-height: 1; text-transform: uppercase;
-}
-.nav-logo-name span {
-  color: var(--cyan);
-  font-family: var(--font-body);
-  font-size: 11px; font-weight: 500;
-  letter-spacing: 0.1em; text-transform: uppercase;
-  display: block; margin-top: -2px;
-}
-.nav-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 4px; }
-.nav-links { display: flex; gap: 2px; align-items: center; }
-.nav-link { font-size: 10px; font-weight: 600; font-family: 'Montserrat', sans-serif; color: rgba(255,255,255,0.5); padding: 6px 13px; border-radius: 4px; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.1em; position: relative; }
-.nav-link:hover { color: white; background: rgba(255,255,255,0.08); text-decoration: none; }
-.nav-link.active { color: white; font-weight: 700; background: rgba(255,255,255,0.1); }
-.nav-link.active::after { content: ''; position: absolute; bottom: -3px; left: 13px; right: 13px; height: 2px; background: #00AFF0; border-radius: 1px; }
-.nav-right { display: flex; align-items: center; gap: 12px; }
-.nav-user { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 500; }
-.nav-user strong { color: white; font-weight: 600; }
-.nav-logout { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); padding: 4px 10px; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.15s; }
-.nav-logout:hover { color: white; border-color: rgba(255,255,255,0.4); text-decoration: none; }
-
-/* LAYOUT */
-.container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
-
-/* CARDS */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
-.card + .card { margin-top: 1rem; }
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-.card-header h2 { font-family: var(--font-body); font-size: 22px; font-weight: 700; color: var(--navy); letter-spacing: 0.01em; line-height: 1.3; }
-
-/* PAGE HEADER */
-.page-header { margin-bottom: 1.75rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-.page-header /* H1: Druk Condensed Super, Verzálky / All Caps */
-h1 { font-family: var(--font-display); font-size: 36px; font-weight: 900; color: var(--navy); letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.0; }
-/* H2: Montserrat Bold */
-h2 { font-family: var(--font-body); font-size: 18px; font-weight: 700; color: var(--navy); line-height: 1.3; }
-/* H3: Montserrat Bold, Verzálky */
-h3 { font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
-.label-caps { font-family: var(--font-body); font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-.perex { font-family: var(--font-body); font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.7; }
-.page-header p { color: var(--muted); font-size: 13px; margin-top: 4px; font-weight: 500; }
-
-/* BUTTONS */
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius); font-size: 12px; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; transition: all 0.15s; font-family: "Montserrat", sans-serif !important; text-decoration: none; letter-spacing: 0.04em; text-transform: uppercase; }
-.btn:hover { text-decoration: none; }
-.btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
-.btn-primary:hover { background: #005fa8; }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-navy { background: #173767; color: white; border-color: var(--navy); }
-.btn-navy:hover { background: var(--navy-mid); }
-.btn-secondary { background: white; color: var(--navy); border-color: var(--border); }
-.btn-secondary:hover { background: var(--bg); }
-.btn-success { background: var(--success); color: white; border-color: var(--success); }
-.btn-success:hover { background: #085f45; }
-.btn-danger { background: transparent; color: var(--danger); border-color: #f0bcbc; }
-.btn-danger:hover { background: var(--danger-bg); }
-.btn-sm { padding: 5px 11px; font-size: 11px; }
-/* Globalni font reset pro vsechna tlacitka */
-button, input[type="submit"], input[type="button"] {
-  font-family: "Montserrat", sans-serif !important;
-}
-/* Nav links jsou Montserrat */
-
-/* FORMS */
-.form-group { margin-bottom: 1.25rem; }
-label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.07em; }
-input[type=text], input[type=email], input[type=password], textarea, select {
-  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius);
-  font-size: 14px; font-family: var(--font-body); background: white; color: var(--text);
-  transition: border-color 0.15s;
-}
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,112,201,0.1); }
-textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
-
-/* BADGES */
-.badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; }
-.badge-blue { background: var(--blue-light); color: var(--blue); }
-.badge-green { background: var(--success-bg); color: var(--success); }
-.badge-gray { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
-.badge-cyan { background: #E0F7FC; color: #006E8A; }
-
-/* ALERTS */
-.alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 1rem; border-left: 3px solid; font-weight: 500; }
-.alert-error { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
-.alert-success { background: var(--success-bg); color: var(--success); border-color: var(--success); }
-
-/* SPINNER */
-.spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* TABLE */
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; padding: 10px 14px; border-bottom: 2px solid var(--border); background: #f0f3f7; }
-td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: #F8FAFC; }
-hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
-</style>
-{% block extra_head %}{% endblock %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Kokpit zakázek — Commarec{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --navy:#173767; --navy-dark:#0E213E; --darkest:#050B15;
+      --cyan:#00AFF0; --cyan-dark:#008ABD;
+      --n1:#2F4B77; --n7:#D1D7E1; --n8:#E8EBF0; --n9:#F3F5F7;
+      --red:#FF383C; --orange:#FF8D28; --green:#34C759; --grey:#BAC3D2;
+      --text:#0F0F0F; --white:#fff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Montserrat',system-ui,sans-serif;color:var(--text);background:var(--n9);line-height:1.5}
+    /* Nadpisy: Druk Condensed Super, fallback Montserrat ExtraBold */
+    h1,h2,.druk{font-family:'Druk Condensed Super','Montserrat',sans-serif;font-weight:800;
+      text-transform:uppercase;letter-spacing:.03em}
+    a{color:var(--cyan-dark);text-decoration:none}
+    .navbar{background:var(--navy);color:#fff;padding:14px 28px;display:flex;
+      align-items:center;justify-content:space-between}
+    .navbar .brand{display:flex;align-items:center;gap:10px}
+    .navbar .mark{width:14px;height:14px;background:var(--cyan);
+      clip-path:polygon(0 0,100% 50%,0 100%,30% 50%)}
+    .navbar .brand b{font-family:'Druk Condensed Super','Montserrat',sans-serif;
+      font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:18px}
+    .navbar .sub{color:var(--grey);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+    .navbar a.logout{color:var(--grey);font-size:13px}
+    .wrap{max-width:1200px;margin:0 auto;padding:28px}
+    .flash{background:#fde8e8;color:#b00;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:14px}
+    .note{background:#fff;border-left:3px solid var(--cyan);padding:10px 14px;border-radius:6px;
+      font-size:13px;color:#445;margin-bottom:20px}
+    /* Stat karty */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+    .stat{background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(14,33,62,.08)}
+    .stat .num{font-family:'Druk Condensed Super','Montserrat',sans-serif;font-weight:800;
+      font-size:34px;color:var(--navy);letter-spacing:.02em}
+    .stat .lbl{font-size:12px;color:#667;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+    /* Filtr */
+    .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+    .filters input,.filters select{padding:9px 12px;border:1px solid var(--n7);border-radius:8px;
+      font-family:inherit;font-size:14px;background:#fff}
+    .filters input[type=text]{min-width:220px}
+    .btn{background:var(--cyan);color:#fff;border:none;padding:9px 18px;border-radius:8px;
+      font-weight:600;cursor:pointer;font-family:inherit;font-size:14px}
+    .btn:hover{background:var(--cyan-dark)}
+    .btn-ghost{background:transparent;color:var(--navy);border:1px solid var(--n7)}
+    /* Tabulka */
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;
+      box-shadow:0 1px 3px rgba(14,33,62,.08)}
+    thead th{background:var(--navy);color:#fff;text-align:left;padding:12px 14px;font-size:12px;
+      text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+    tbody td{padding:11px 14px;border-bottom:1px solid var(--n8);font-size:14px}
+    tbody tr:nth-child(even){background:var(--n9)}
+    tbody tr:hover{background:var(--n8)}
+    .code{font-family:ui-monospace,monospace;font-size:12px;color:#667}
+    .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;
+      background:var(--n8);color:var(--navy)}
+    .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+    .neutral{background:var(--grey)} .zelena{background:var(--green)}
+    .oranzova{background:var(--orange)} .cervena{background:var(--red)}
+    .hrs{font-weight:700;color:var(--navy)}
+    .muted{color:#99a}
+  </style>
 </head>
 <body>
-{% if session.user_id %}
-<nav class="nav">
-  <a href="{{ url_for('main.prehled') }}" class="nav-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
-    <img src="/static/logo-white.svg" alt="Commarec" style="height:26px;width:auto;display:block;">
-    <span style="color:rgba(255,255,255,0.4);font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;border-left:1px solid rgba(255,255,255,0.2);padding-left:10px;">Zápisy</span>
-  </a>
-  <div class="nav-divider"></div>
-  <div class="nav-links">
-    <a href="{{ url_for('main.prehled') }}" class="nav-link {% if request.endpoint in ['prehled','home','dashboard','crm_prehled','klient_detail','klient_vyvoj','klient_novy','klient_upravit','projekt_detail','klienti_list'] %}active{% endif %}">Přehled</a>
-    <a href="{{ url_for('zapisy.novy_zapis') }}" class="nav-link {% if request.endpoint == 'novy_zapis' %}active{% endif %}" style="background:#00AFF0; color:#0E213E; padding:6px 16px; border-radius:4px; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; white-space:nowrap;">+ Nový zápis</a>
-    {% if session.is_admin %}
-    <a href="{{ url_for('report.report_mesicni') }}" class="nav-link {% if request.endpoint in ['report_mesicni','progress_report'] %}active{% endif %}">AI Report</a>
-    <a href="{{ url_for('admin_bp.admin') }}" class="nav-link {% if request.endpoint in ['admin','admin_templates'] %}active{% endif %}">Správa</a>
-    <a href="{{ url_for('main.navod') }}" class="nav-link {% if request.endpoint == 'main.navod' %}active{% endif %}">Návod</a>
-    {% endif %}
+  <div class="navbar">
+    <div class="brand">
+      <span class="mark"></span>
+      <b>Commarec</b><span class="sub">Kokpit zakázek</span>
+    </div>
+    {% if session.get('prihlasen') %}<a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>{% endif %}
   </div>
-  <div class="nav-right">
-    <span class="nav-user"><strong>{{ session.user_name }}</strong></span>
-    <a href="{{ url_for('main.logout') }}" class="nav-logout">Odhlásit</a>
+  <div class="wrap">
+    {% with msgs = get_flashed_messages() %}
+      {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
   </div>
-</nav>
-{% endif %}
-{% block content %}{% endblock %}
 </body>
 </html>
