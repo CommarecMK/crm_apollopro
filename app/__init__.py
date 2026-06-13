@@ -62,6 +62,12 @@ def _inline_migrace():
             },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",
+                "typ_rozpoctu": "VARCHAR(20) DEFAULT 'projektovy'",
+                "hodinova_sazba": "FLOAT",
+                "rozpocet_hodin_mesic": "FLOAT",
+                "budget_castka": "FLOAT",
+                "analyza_zaloha": "BOOLEAN DEFAULT FALSE",
+                "analyza_odevzdano": "BOOLEAN DEFAULT FALSE",
             },
         }
         for tab, sloupce in plan.items():

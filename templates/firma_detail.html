@@ -70,7 +70,7 @@
       <tbody>
         {% for z in firma.zakazky %}
         <tr>
-          <td>{{ z.nazev }} <span class="code">{{ z.zkratka }}</span></td>
+          <td><a href="{{ url_for('main.zakazka_upravit', id=z.id) }}">{{ z.nazev }}</a> <span class="code">{{ z.zkratka }}</span></td>
           <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
           <td style="text-align:center">
             <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">

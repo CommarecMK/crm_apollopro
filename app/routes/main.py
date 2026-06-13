@@ -97,10 +97,11 @@ def diagnostika_merk():
 
 
 def _vyhodnot_riziko(z):
-    """Vrátí (stav_indikatoru, popis). Bez rozpočtu zatím neutrální."""
-    if not z.rozpocet_hodin:
+    """Vrátí (stav_indikatoru, popis) podle čerpání hodin vs rozpočet."""
+    rozpocet = z.rozpocet_hodin_efekt
+    if not rozpocet:
         return ("neutral", "Bez rozpočtu hodin")
-    pct = round(100 * z.hodiny / z.rozpocet_hodin) if z.rozpocet_hodin else 0
+    pct = round(100 * (z.hodiny or 0) / rozpocet)
     if pct >= 100:
         return ("cervena", f"Přečerpáno ({pct} %)")
     if pct >= 85:
@@ -128,8 +129,10 @@ def dashboard():
         q = q.filter(db.or_(Zakazka.nazev.ilike(like), Zakazka.zkratka.ilike(like)))
     zakazky = q.order_by(Zakazka.nazev).all()
 
-    # Hodiny z Clockify za zvolené období (měsíc nebo celý rok)
-    mesic = request.args.get("mesic", "")
+    # Hodiny z Clockify za zvolené období. Výchozí = aktuální měsíc.
+    mesic = request.args.get("mesic")
+    if mesic is None:
+        mesic = datetime.now(timezone.utc).strftime("%Y-%m")
     od, do, obdobi_popis = _obdobi(mesic)
     clockify.obohat_zakazky(zakazky, od, do)
 
@@ -144,6 +147,7 @@ def dashboard():
         "celkem_nonbill": round(sum(z.hodiny_nonbill for z in zakazky), 1),
         "klientske_hodin": round(sum(z.hodiny for z in zakazky if not z.je_interni), 1),
         "interni_hodin": round(sum(z.hodiny for z in zakazky if z.je_interni), 1),
+        "trzby_skutecnost": round(sum(z.trzba_skutecnost for z in zakazky)),
         "pocet_firem": len({z.firma_id for z in zakazky}),
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
@@ -255,12 +259,26 @@ def kontakt_upravit(id):
 def zakazka_upravit(id):
     z = Zakazka.query.get_or_404(id)
     if request.method == "POST":
-        rh = request.form.get("rozpocet_hodin", "").strip().replace(",", ".")
-        try:
-            z.rozpocet_hodin = float(rh) if rh else None
-        except ValueError:
-            z.rozpocet_hodin = z.rozpocet_hodin
-        z.stav = request.form.get("stav", z.stav)
+        def _num(pole):
+            v = request.form.get(pole, "").strip().replace(",", ".").replace(" ", "")
+            try:
+                return float(v) if v else None
+            except ValueError:
+                return None
+        typ = request.form.get("typ_rozpoctu", z.typ_rozpoctu)
+        z.typ_rozpoctu = typ
+        z.hodinova_sazba = _num("hodinova_sazba")
+        z.rozpocet_hodin = _num("rozpocet_hodin")
+        z.rozpocet_hodin_mesic = _num("rozpocet_hodin_mesic")
+        # částka podle typu (různá pole ve formuláři)
+        if typ == "analyza":
+            z.budget_castka = _num("budget_castka_a")
+        elif typ == "projektovy":
+            z.budget_castka = _num("budget_castka_p")
+        else:
+            z.budget_castka = None
+        z.analyza_zaloha = bool(request.form.get("analyza_zaloha"))
+        z.analyza_odevzdano = bool(request.form.get("analyza_odevzdano"))
         for pole in ("datum_od", "datum_do"):
             val = request.form.get(pole, "").strip()
             try:
@@ -269,7 +287,7 @@ def zakazka_upravit(id):
                 pass
         db.session.commit()
         flash("Zakázka uložena.", "info")
-        return redirect(url_for("main.dashboard"))
+        return redirect(request.form.get("zpet") or url_for("main.dashboard"))
     return render_template("zakazka_upravit.html", z=z)
 
 

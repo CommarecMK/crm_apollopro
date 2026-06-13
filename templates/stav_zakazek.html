@@ -19,6 +19,7 @@
   <div class="stat"><div class="num" style="color:var(--orange)">{{ souhrn.celkem_nonbill }}</div><div class="lbl">Nefakturovatelné</div></div>
   <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
   <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ souhrn.interni_hodin }}</div><div class="lbl">Interní hodiny</div></div>
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(souhrn.trzby_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržby (Kč, období)</div></div>
 </div>
 
 <form class="filters" method="get">
@@ -48,6 +49,7 @@
       <th style="text-align:right">Fakt.</th>
       <th style="text-align:right">Nefakt.</th>
       <th style="text-align:right">Rozpočet</th>
+      <th style="text-align:right">Tržba (Kč)</th>
       <th>Stav / riziko</th>
     </tr>
   </thead>
@@ -63,11 +65,12 @@
       <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>
       <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
       <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
-      <td style="text-align:right">{{ z.rozpocet_hodin or '—' }}</td>
+      <td style="text-align:right">{{ z.rozpocet_hodin_efekt or '—' }}</td>
+      <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="8" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
+    <tr><td colspan="9" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
     {% endfor %}
   </tbody>
 </table>

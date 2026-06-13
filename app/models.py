@@ -57,7 +57,15 @@ class Zakazka(db.Model):
     aktivni     = db.Column(db.Boolean, default=True)         # aktivní / neaktivní zakázka
     datum_od    = db.Column(db.Date, nullable=True)
     datum_do    = db.Column(db.Date, nullable=True)
-    rozpocet_hodin = db.Column(db.Float, nullable=True)       # plán hodin (z nabídky)
+
+    # ── Rozpočet / fakturační model ──────────────────────────────
+    typ_rozpoctu   = db.Column(db.String(20), default="projektovy")  # mesicni | projektovy | analyza
+    hodinova_sazba = db.Column(db.Float, nullable=True)      # Kč/h
+    rozpocet_hodin       = db.Column(db.Float, nullable=True)  # projektový rozpočet hodin
+    rozpocet_hodin_mesic = db.Column(db.Float, nullable=True)  # měsíční rozpočet hodin
+    budget_castka  = db.Column(db.Float, nullable=True)      # pevná částka (projekt) / cena analýzy
+    analyza_zaloha    = db.Column(db.Boolean, default=False)  # uhrazeno 40 % předem
+    analyza_odevzdano = db.Column(db.Boolean, default=False)  # odevzdáno → doplatek 60 %
 
     firma_id    = db.Column(db.Integer, db.ForeignKey("firma.id"), nullable=False)
     firma       = db.relationship("Firma", back_populates="zakazky", lazy="joined")
@@ -80,3 +88,31 @@ class Zakazka(db.Model):
     def je_aktivni(self):
         """Efektivní aktivita: zakázka je aktivní jen když je aktivní i klient."""
         return bool(self.aktivni and (self.firma.aktivni if self.firma else True))
+
+    @property
+    def rozpocet_hodin_efekt(self):
+        """Rozpočet hodin relevantní pro indikátor čerpání."""
+        if self.typ_rozpoctu == "mesicni":
+            return self.rozpocet_hodin_mesic
+        return self.rozpocet_hodin
+
+    @property
+    def trzba_plan(self):
+        """Plánovaná tržba (měsíční u 'mesicni', celková u ostatních)."""
+        s = self.hodinova_sazba or 0
+        if self.typ_rozpoctu == "mesicni":
+            return round((self.rozpocet_hodin_mesic or 0) * s)
+        if self.typ_rozpoctu == "analyza":
+            return round(self.budget_castka or 0)
+        return round(self.budget_castka) if self.budget_castka else round((self.rozpocet_hodin or 0) * s)
+
+    @property
+    def trzba_skutecnost(self):
+        """Skutečná tržba. U analýzy dle milníků 40/60, jinak odpracované hodiny × sazba.
+        Hodiny (self.hodiny) doplňuje Clockify za zvolené období."""
+        hod = getattr(self, "hodiny", 0) or 0
+        s = self.hodinova_sazba or 0
+        if self.typ_rozpoctu == "analyza":
+            c = self.budget_castka or 0
+            return round((0.4 if self.analyza_zaloha else 0) * c + (0.6 if self.analyza_odevzdano else 0) * c)
+        return round(hod * s)

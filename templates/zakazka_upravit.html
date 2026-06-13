@@ -1,37 +1,83 @@
 {% extends "base.html" %}
 {% block content %}
-<p style="margin-bottom:6px"><a href="{{ url_for('main.dashboard') }}">← Zpět na zakázky</a></p>
+<p style="margin-bottom:6px"><a href="{{ url_for('main.firma_detail', id=z.firma_id) }}">← Zpět na firmu</a></p>
 <h1 style="color:var(--navy);font-size:26px;margin-bottom:2px">{{ z.nazev }}</h1>
 <p class="muted" style="margin-bottom:16px">{{ z.zkratka }} · {{ z.firma.nazev }}</p>
 
-<form method="post" style="max-width:520px;background:#fff;padding:24px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
+{% set istyl = "width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+<form method="post" style="max-width:560px;background:#fff;padding:24px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="zpet" value="{{ url_for('main.firma_detail', id=z.firma_id) }}">
 
   <label style="display:block;margin-bottom:14px">
-    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Rozpočet hodin (z nabídky)</span>
-    <input type="text" name="rozpocet_hodin" value="{{ z.rozpocet_hodin or '' }}" placeholder="např. 180"
-           style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Typ rozpočtu</span>
+    <select name="typ_rozpoctu" id="typ" onchange="prepni()" style="{{ istyl }}">
+      <option value="mesicni" {{ 'selected' if z.typ_rozpoctu=='mesicni' }}>Měsíční (hodiny/měsíc × sazba)</option>
+      <option value="projektovy" {{ 'selected' if z.typ_rozpoctu=='projektovy' }}>Projektový (pevný budget)</option>
+      <option value="analyza" {{ 'selected' if z.typ_rozpoctu=='analyza' }}>Vstupní analýza (40 % / 60 %)</option>
+    </select>
   </label>
 
-  <p class="muted" style="font-size:12px;margin-bottom:14px">Aktivitu zakázky přepínáš v adminu firem (na detailu klienta).</p>
+  <label style="display:block;margin-bottom:14px" class="pole-sazba">
+    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Hodinová sazba (Kč/h)</span>
+    <input type="text" name="hodinova_sazba" value="{{ z.hodinova_sazba or '' }}" placeholder="např. 1500" style="{{ istyl }}">
+  </label>
+
+  <!-- Měsíční -->
+  <div class="blok blok-mesicni">
+    <label style="display:block;margin-bottom:14px">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Rozpočet hodin / měsíc</span>
+      <input type="text" name="rozpocet_hodin_mesic" value="{{ z.rozpocet_hodin_mesic or '' }}" placeholder="např. 40" style="{{ istyl }}">
+    </label>
+  </div>
+
+  <!-- Projektový -->
+  <div class="blok blok-projektovy">
+    <label style="display:block;margin-bottom:14px">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Projektový rozpočet — hodiny</span>
+      <input type="text" name="rozpocet_hodin" value="{{ z.rozpocet_hodin or '' }}" placeholder="např. 180" style="{{ istyl }}">
+    </label>
+    <label style="display:block;margin-bottom:14px">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">…nebo pevná částka (Kč)</span>
+      <input type="text" name="budget_castka_p" id="budget_castka_p" value="{{ z.budget_castka or '' }}" placeholder="např. 250000" style="{{ istyl }}">
+    </label>
+  </div>
+
+  <!-- Analýza -->
+  <div class="blok blok-analyza">
+    <label style="display:block;margin-bottom:14px">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Cena analýzy (Kč)</span>
+      <input type="text" name="budget_castka_a" id="budget_castka_a" value="{{ z.budget_castka or '' }}" placeholder="např. 80000" style="{{ istyl }}">
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <input type="checkbox" name="analyza_zaloha" {{ 'checked' if z.analyza_zaloha }}> Uhrazena záloha 40 %
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <input type="checkbox" name="analyza_odevzdano" {{ 'checked' if z.analyza_odevzdano }}> Odevzdáno → doplatek 60 %
+    </label>
+  </div>
 
   <div style="display:flex;gap:12px;margin-bottom:14px">
-    <label style="flex:1">
-      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Od</span>
-      <input type="date" name="datum_od" value="{{ z.datum_od.isoformat() if z.datum_od else '' }}"
-             style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
-    </label>
-    <label style="flex:1">
-      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Do</span>
-      <input type="date" name="datum_do" value="{{ z.datum_do.isoformat() if z.datum_do else '' }}"
-             style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
-    </label>
+    <label style="flex:1"><span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Od</span>
+      <input type="date" name="datum_od" value="{{ z.datum_od.isoformat() if z.datum_od else '' }}" style="{{ istyl }}"></label>
+    <label style="flex:1"><span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Do</span>
+      <input type="date" name="datum_do" value="{{ z.datum_do.isoformat() if z.datum_do else '' }}" style="{{ istyl }}"></label>
   </div>
 
-  <div style="margin-top:8px;display:flex;gap:10px">
+  <div style="display:flex;gap:10px">
     <button class="btn" type="submit">Uložit</button>
-    <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Zrušit</a>
+    <a class="btn btn-ghost" href="{{ url_for('main.firma_detail', id=z.firma_id) }}">Zrušit</a>
   </div>
-  <p class="muted" style="font-size:12px;margin-top:12px">Po zadání rozpočtu se na dashboardu rozsvítí indikátor čerpání (zelená/oranžová/červená).</p>
+  <p class="muted" style="font-size:12px;margin-top:12px">Aktivitu zakázky přepínáš v adminu firmy. Tržby se počítají z odpracovaných hodin × sazba (u analýzy dle milníků 40/60).</p>
 </form>
+
+<script>
+function prepni(){
+  var t=document.getElementById('typ').value;
+  document.querySelectorAll('.blok').forEach(function(b){b.style.display='none';});
+  var el=document.querySelector('.blok-'+t); if(el) el.style.display='block';
+  document.querySelector('.pole-sazba').style.display = (t==='analyza')?'none':'block';
+}
+prepni();
+</script>
 {% endblock %}
