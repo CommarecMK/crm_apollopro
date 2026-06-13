@@ -491,8 +491,13 @@ def pm_detail(jmeno):
     snap, updated = snapshot.nacti()
     hod = snap.get("hodiny", {})
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
-    vsechny = _bez_internich(Zakazka.query.join(Firma)
-              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    f_aktivita = request.args.get("aktivita", "aktivni")
+    q = _bez_internich(Zakazka.query.join(Firma))
+    if f_aktivita == "aktivni":
+        q = q.filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))
+    elif f_aktivita == "neaktivni":
+        q = q.filter(db.or_(Zakazka.aktivni.is_(False), Firma.aktivni.is_(False)))
+    vsechny = q.all()
     if jmeno == "— bez PM —":
         zakazky = [z for z in vsechny if not z.efekt_pm]
     else:
@@ -515,7 +520,7 @@ def pm_detail(jmeno):
            "plan": sum(z._plan for z in zakazky),
            "trzby": sum(graf["fakt"]), "potencial": sum(graf["pot"])}
     return render_template("pm_detail.html", jmeno=jmeno, zakazky=zakazky, graf=graf,
-                           kpi=kpi, rok=now.year, updated=updated)
+                           kpi=kpi, rok=now.year, updated=updated, f_aktivita=f_aktivita)
 
 
 @bp.route("/cashflow")

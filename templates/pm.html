@@ -29,7 +29,7 @@
   <tbody>
     {% for r in radky %}
     <tr>
-      <td><a href="{{ url_for('main.pm_detail', jmeno=r.pm) }}"><b>{{ r.pm }}</b></a></td>
+      <td><a href="{{ url_for('main.pm_detail', jmeno=r.pm, aktivita=f_aktivita) }}"><b>{{ r.pm }}</b></a></td>
       <td style="text-align:right">{{ r.zakazek }}</td>
       <td style="text-align:right;color:var(--green)">{{ r.hodin }}</td>
       <td style="text-align:right;color:var(--navy)">{{ "{:,.0f}".format(r.plan).replace(",", " ") }}</td>

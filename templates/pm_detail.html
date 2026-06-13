@@ -2,8 +2,16 @@
 {% block content %}
 <p style="margin-bottom:6px"><a href="{{ url_for('main.pm_prehled') }}">← Projektoví manažeři</a></p>
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">{{ jmeno }}</h1>
-<p class="muted" style="margin-bottom:18px">Profil PM · rok {{ rok }}
+<p class="muted" style="margin-bottom:12px">Profil PM · rok {{ rok }}
   {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
+
+<form class="filters" method="get" style="margin-bottom:18px">
+  <select name="aktivita" onchange="this.form.submit()">
+    {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
+      <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>
+    {% endfor %}
+  </select>
+</form>
 
 <div class="stats">
   <div class="stat"><div class="num">{{ kpi.zakazek }}</div><div class="lbl">Zakázek</div></div>
