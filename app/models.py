@@ -90,29 +90,39 @@ class Zakazka(db.Model):
         return bool(self.aktivni and (self.firma.aktivni if self.firma else True))
 
     @property
+    def _mesicu(self):
+        """Počet měsíců zvoleného období (1 pro měsíc, N pro rok). Nastaví route."""
+        return getattr(self, "_pocet_mesicu", 1) or 1
+
+    @property
     def rozpocet_hodin_efekt(self):
-        """Rozpočet hodin relevantní pro indikátor čerpání."""
+        """Rozpočet hodin za zvolené období (měsíční × počet měsíců, projektový napevno)."""
         if self.typ_rozpoctu == "mesicni":
-            return self.rozpocet_hodin_mesic
+            return (self.rozpocet_hodin_mesic or 0) * self._mesicu if self.rozpocet_hodin_mesic else None
         return self.rozpocet_hodin
 
     @property
     def trzba_plan(self):
-        """Plánovaná tržba (měsíční u 'mesicni', celková u ostatních)."""
+        """Plánovaná tržba za zvolené období. Měsíční × počet měsíců, jinak celková."""
         s = self.hodinova_sazba or 0
         if self.typ_rozpoctu == "mesicni":
-            return round((self.rozpocet_hodin_mesic or 0) * s)
+            return (self.rozpocet_hodin_mesic or 0) * self._mesicu * s
         if self.typ_rozpoctu == "analyza":
-            return round(self.budget_castka or 0)
-        return round(self.budget_castka) if self.budget_castka else round((self.rozpocet_hodin or 0) * s)
+            return self.budget_castka or 0
+        return self.budget_castka if self.budget_castka else (self.rozpocet_hodin or 0) * s
 
     @property
     def trzba_skutecnost(self):
-        """Skutečná tržba. U analýzy dle milníků 40/60, jinak odpracované hodiny × sazba.
-        Hodiny (self.hodiny) doplňuje Clockify za zvolené období."""
-        hod = getattr(self, "hodiny", 0) or 0
+        """Skutečná tržba = FAKTUROVATELNÉ hodiny × sazba. U analýzy dle milníků 40/60.
+        Hodiny doplňuje Clockify za zvolené období."""
+        hod_bill = getattr(self, "hodiny_bill", 0) or 0
         s = self.hodinova_sazba or 0
         if self.typ_rozpoctu == "analyza":
             c = self.budget_castka or 0
-            return round((0.4 if self.analyza_zaloha else 0) * c + (0.6 if self.analyza_odevzdano else 0) * c)
-        return round(hod * s)
+            return (0.4 if self.analyza_zaloha else 0) * c + (0.6 if self.analyza_odevzdano else 0) * c
+        return hod_bill * s
+
+    @property
+    def nenaplneny_potencial(self):
+        """Kolik z plánu ještě chybí (plán − skutečnost), min. 0."""
+        return max((self.trzba_plan or 0) - (self.trzba_skutecnost or 0), 0)

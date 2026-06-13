@@ -19,17 +19,19 @@ MESICE_CZ = ["", "leden", "únor", "březen", "duben", "květen", "červen",
 
 
 def _obdobi(mesic):
-    """Z parametru 'YYYY-MM' vrátí (od, do, popis). Prázdné = celý aktuální rok."""
+    """Z parametru 'YYYY-MM' vrátí (od, do, popis, pocet_mesicu).
+    Prázdné = celý aktuální rok (od ledna do teď)."""
     now = datetime.now(timezone.utc)
     if mesic and "-" in mesic:
         rok, m = (int(x) for x in mesic.split("-"))
         posl = calendar.monthrange(rok, m)[1]
         od = f"{rok}-{m:02d}-01T00:00:00Z"
         do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
-        return od, do, f"{MESICE_CZ[m]} {rok}"
+        return od, do, f"{MESICE_CZ[m]} {rok}", 1
+    # Celý rok = leden až aktuální měsíc → počet měsíců = číslo aktuálního měsíce
     return (f"{now.year}-01-01T00:00:00Z",
             now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            f"rok {now.year}")
+            f"rok {now.year}", now.month)
 
 
 def _seznam_mesicu(pocet=14):
@@ -133,10 +135,11 @@ def dashboard():
     mesic = request.args.get("mesic")
     if mesic is None:
         mesic = datetime.now(timezone.utc).strftime("%Y-%m")
-    od, do, obdobi_popis = _obdobi(mesic)
+    od, do, obdobi_popis, pocet_mesicu = _obdobi(mesic)
     clockify.obohat_zakazky(zakazky, od, do)
 
     for z in zakazky:
+        z._pocet_mesicu = pocet_mesicu          # přepočet rozpočtu dle období
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
 
     typy = sorted({z.typ_sluzby for z in Zakazka.query.all() if z.typ_sluzby})
@@ -148,6 +151,7 @@ def dashboard():
         "klientske_hodin": round(sum(z.hodiny for z in zakazky if not z.je_interni), 1),
         "interni_hodin": round(sum(z.hodiny for z in zakazky if z.je_interni), 1),
         "trzby_skutecnost": round(sum(z.trzba_skutecnost for z in zakazky)),
+        "potencial": round(sum(z.nenaplneny_potencial for z in zakazky)),
         "pocet_firem": len({z.firma_id for z in zakazky}),
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
@@ -252,6 +256,25 @@ def kontakt_upravit(id):
         flash("Kontakt uložen.", "info")
         return redirect(url_for("main.firma_detail", id=k.firma_id))
     return render_template("kontakt_upravit.html", k=k)
+
+
+@bp.route("/zakazka/<int:id>")
+@login_required
+def zakazka_detail(id):
+    z = Zakazka.query.get_or_404(id)
+    now = datetime.now(timezone.utc)
+    serie = clockify.mesicni_serie(z.zkratka, now.year, now.month)
+    z._pocet_mesicu = now.month
+    z.hodiny = round(sum(s[1] for s in serie), 1)
+    z.hodiny_bill = round(sum(s[2] for s in serie), 1)
+    z.hodiny_nonbill = round(z.hodiny - z.hodiny_bill, 1)
+    graf = {
+        "labels": [MESICE_CZ[m][:3] for m, _, _ in serie],
+        "celkem": [tot for _, tot, _ in serie],
+        "bill": [bil for _, _, bil in serie],
+        "trzba": [round((bil) * (z.hodinova_sazba or 0)) for _, _, bil in serie],
+    }
+    return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year)
 
 
 @bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])

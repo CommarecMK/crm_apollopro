@@ -20,6 +20,7 @@
   <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
   <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ souhrn.interni_hodin }}</div><div class="lbl">Interní hodiny</div></div>
   <div class="stat"><div class="num">{{ "{:,.0f}".format(souhrn.trzby_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržby (Kč, období)</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(souhrn.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál (Kč)</div></div>
 </div>
 
 <form class="filters" method="get">
@@ -45,28 +46,28 @@
   <thead>
     <tr>
       <th>Zakázka</th><th>Firma</th><th>Typ</th>
-      <th style="text-align:right">Celkem</th>
-      <th style="text-align:right">Fakt.</th>
-      <th style="text-align:right">Nefakt.</th>
-      <th style="text-align:right">Rozpočet</th>
+      <th style="text-align:right">Fakt. h</th>
+      <th style="text-align:right">Nefakt. h</th>
+      <th style="text-align:right">Rozpočet h</th>
       <th style="text-align:right">Tržba (Kč)</th>
-      <th>Stav / riziko</th>
+      <th style="text-align:right">Potenciál (Kč)</th>
+      <th>Riziko</th>
     </tr>
   </thead>
   <tbody>
     {% for z in zakazky %}
     <tr>
-      <td><div><a href="{{ url_for('main.zakazka_upravit', id=z.id) }}">{{ z.nazev }}</a>
+      <td><div><a href="{{ url_for('main.firma_detail', id=z.firma_id) }}">{{ z.nazev }}</a>
         {% if z.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
         {% if not z.je_aktivni %} <span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}</div>
         <div class="code">{{ z.zkratka }}</div></td>
       <td>{{ z.firma.nazev }}</td>
       <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
-      <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>
-      <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
+      <td style="text-align:right;color:var(--green)"><span class="hrs">{{ z.hodiny_bill }}</span></td>
       <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
       <td style="text-align:right">{{ z.rozpocet_hodin_efekt or '—' }}</td>
       <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
+      <td style="text-align:right;color:var(--orange)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}

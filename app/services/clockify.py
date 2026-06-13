@@ -121,6 +121,30 @@ def obohat_zakazky(zakazky, datum_od, datum_do):
     return zakazky
 
 
+def mesicni_serie(zkratka, rok, do_mesic):
+    """Vrátí list (mesic, hodiny_celkem, hodiny_bill) pro leden..do_mesic daného roku.
+    Páruje klienta podle zkratky v poli Note."""
+    if not je_nakonfigurovano() or not zkratka:
+        return []
+    try:
+        import calendar as _cal
+        ws = _workspace_id()
+        ids = {k.get("id") for k in _seznam(ws, "clients")
+               if (k.get("note") or "").strip() == zkratka}
+        out = []
+        for m in range(1, do_mesic + 1):
+            posl = _cal.monthrange(rok, m)[1]
+            od = f"{rok}-{m:02d}-01T00:00:00Z"
+            do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
+            tot = sum(h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do) if cid in ids)
+            bil = sum(h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do, billable=True) if cid in ids)
+            out.append((m, round(tot, 1), round(bil, 1)))
+        return out
+    except Exception as e:
+        print(f"[clockify] mesicni_serie: {e}")
+        return []
+
+
 def diagnostika(datum_od, datum_do):
     """Vrátí přehled toho, co Clockify vrací — pro doladění párování."""
     if not je_nakonfigurovano():
