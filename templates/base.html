@@ -64,6 +64,14 @@
     .oranzova{background:var(--orange)} .cervena{background:var(--red)}
     .hrs{font-weight:700;color:var(--navy)}
     .muted{color:#99a}
+    /* Přepínač (šoupátko) */
+    .switch{position:relative;display:inline-block;width:44px;height:24px;vertical-align:middle}
+    .switch input{opacity:0;width:0;height:0}
+    .slider{position:absolute;inset:0;background:var(--grey);border-radius:24px;cursor:pointer;transition:.2s}
+    .slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+    .switch input:checked + .slider{background:var(--green)}
+    .switch input:checked + .slider:before{transform:translateX(20px)}
+    .switch input:disabled + .slider{opacity:.4;cursor:not-allowed}
   </style>
 </head>
 <body>

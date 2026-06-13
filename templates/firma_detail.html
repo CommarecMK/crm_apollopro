@@ -64,12 +64,25 @@
 
     <!-- Zakázky firmy -->
     <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
+    {% if not firma.aktivni %}<p class="muted" style="font-size:12px;margin-bottom:8px">Klient je neaktivní → všechny jeho zakázky jsou neaktivní.</p>{% endif %}
     <table>
-      <thead><tr><th>Zakázka</th><th>Typ</th><th>Stav</th></tr></thead>
+      <thead><tr><th>Zakázka</th><th>Typ</th><th style="text-align:center">Aktivní</th></tr></thead>
       <tbody>
         {% for z in firma.zakazky %}
-        <tr><td>{{ z.nazev }} <span class="code">{{ z.zkratka }}</span></td>
-          <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td><td>{{ z.stav }}</td></tr>
+        <tr>
+          <td>{{ z.nazev }} <span class="code">{{ z.zkratka }}</span></td>
+          <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+          <td style="text-align:center">
+            <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="switch">
+                <input type="checkbox" {{ 'checked' if z.aktivni }} {{ 'disabled' if not firma.aktivni }}
+                       onchange="this.form.submit()">
+                <span class="slider"></span>
+              </label>
+            </form>
+          </td>
+        </tr>
         {% else %}
         <tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
         {% endfor %}
@@ -78,6 +91,20 @@
   </div>
 
   <!-- Akce -->
+  <div>
+  <div class="stat" style="margin-bottom:18px">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Klient</h3>
+    <form method="post" action="{{ url_for('main.firma_toggle', id=firma.id) }}" style="display:flex;align-items:center;gap:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="switch">
+        <input type="checkbox" {{ 'checked' if firma.aktivni }} onchange="this.form.submit()">
+        <span class="slider"></span>
+      </label>
+      <span>{{ 'Aktivní' if firma.aktivni else 'Neaktivní' }}</span>
+    </form>
+    <p class="muted" style="font-size:12px;margin-top:8px">Neaktivní klient = všechny jeho zakázky neaktivní.</p>
+  </div>
+
   <div class="stat">
     <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Doplnit data</h3>
     <p class="muted" style="font-size:13px;margin-bottom:14px">
@@ -92,6 +119,7 @@
 
     <hr style="border:none;border-top:1px solid var(--n8);margin:16px 0">
     <a class="btn btn-ghost" href="{{ url_for('main.firma_upravit', id=firma.id) }}" style="width:100%;text-align:center;display:block">Upravit ručně ✎</a>
+  </div>
   </div>
 </div>
 {% endblock %}

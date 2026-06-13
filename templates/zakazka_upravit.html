@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.dashboard') }}">← Zpět na zakázky</a></p>
+<h1 style="color:var(--navy);font-size:26px;margin-bottom:2px">{{ z.nazev }}</h1>
+<p class="muted" style="margin-bottom:16px">{{ z.zkratka }} · {{ z.firma.nazev }}</p>
+
+<form method="post" style="max-width:520px;background:#fff;padding:24px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <label style="display:block;margin-bottom:14px">
+    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Rozpočet hodin (z nabídky)</span>
+    <input type="text" name="rozpocet_hodin" value="{{ z.rozpocet_hodin or '' }}" placeholder="např. 180"
+           style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+  </label>
+
+  <p class="muted" style="font-size:12px;margin-bottom:14px">Aktivitu zakázky přepínáš v adminu firem (na detailu klienta).</p>
+
+  <div style="display:flex;gap:12px;margin-bottom:14px">
+    <label style="flex:1">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Od</span>
+      <input type="date" name="datum_od" value="{{ z.datum_od.isoformat() if z.datum_od else '' }}"
+             style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+    </label>
+    <label style="flex:1">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Do</span>
+      <input type="date" name="datum_do" value="{{ z.datum_do.isoformat() if z.datum_do else '' }}"
+             style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+    </label>
+  </div>
+
+  <div style="margin-top:8px;display:flex;gap:10px">
+    <button class="btn" type="submit">Uložit</button>
+    <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Zrušit</a>
+  </div>
+  <p class="muted" style="font-size:12px;margin-top:12px">Po zadání rozpočtu se na dashboardu rozsvítí indikátor čerpání (zelená/oranžová/červená).</p>
+</form>
+{% endblock %}

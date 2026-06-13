@@ -22,6 +22,7 @@ class Firma(db.Model):
     obrat        = db.Column(db.String(80))     # rozsah z MERK
     merk_nacteno = db.Column(db.String(40))    # datum posledního natažení
     rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
+    aktivni      = db.Column(db.Boolean, default=True)     # aktivní / neaktivní klient
 
     zakazky  = db.relationship("Zakazka", back_populates="firma", lazy=True)
     kontakty = db.relationship("Kontakt", back_populates="firma", lazy=True,
@@ -52,7 +53,8 @@ class Zakazka(db.Model):
     zkratka     = db.Column(db.String(40), nullable=False, unique=True, index=True)  # např. 02023024_1
     nazev       = db.Column(db.String(300), nullable=False)   # "Canna B2B - Interim"
     typ_sluzby  = db.Column(db.String(60))                    # Interim / Professional / Obaly ...
-    stav        = db.Column(db.String(20), default="aktivni") # aktivni / pozastaveno / dokonceno
+    stav        = db.Column(db.String(20), default="aktivni") # ponecháno pro detail (fáze)
+    aktivni     = db.Column(db.Boolean, default=True)         # aktivní / neaktivní zakázka
     datum_od    = db.Column(db.Date, nullable=True)
     datum_do    = db.Column(db.Date, nullable=True)
     rozpocet_hodin = db.Column(db.Float, nullable=True)       # plán hodin (z nabídky)
@@ -73,3 +75,8 @@ class Zakazka(db.Model):
     def je_interni(self):
         from .extensions import COMPANY_ICO
         return self.ico == COMPANY_ICO
+
+    @property
+    def je_aktivni(self):
+        """Efektivní aktivita: zakázka je aktivní jen když je aktivní i klient."""
+        return bool(self.aktivni and (self.firma.aktivni if self.firma else True))

@@ -55,9 +55,13 @@ def _inline_migrace():
                 "web": "VARCHAR(200)", "obor": "VARCHAR(200)", "zamestnanci": "VARCHAR(80)",
                 "obrat": "VARCHAR(80)", "merk_nacteno": "VARCHAR(40)",
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
+                "aktivni": "BOOLEAN DEFAULT TRUE",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
+            },
+            "zakazka": {
+                "aktivni": "BOOLEAN DEFAULT TRUE",
             },
         }
         for tab, sloupce in plan.items():

@@ -112,13 +112,15 @@ def _vyhodnot_riziko(z):
 @login_required
 def dashboard():
     # Filtry
-    f_stav = request.args.get("stav", "")
+    f_aktivita = request.args.get("aktivita", "aktivni")  # výchozí: jen aktivní
     f_typ = request.args.get("typ", "")
     hledat = request.args.get("q", "").strip()
 
-    q = Zakazka.query
-    if f_stav:
-        q = q.filter(Zakazka.stav == f_stav)
+    q = Zakazka.query.join(Firma)
+    if f_aktivita == "aktivni":   # aktivní zakázka i aktivní klient
+        q = q.filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))
+    elif f_aktivita == "neaktivni":  # zakázka NEBO klient neaktivní
+        q = q.filter(db.or_(Zakazka.aktivni.is_(False), Firma.aktivni.is_(False)))
     if f_typ:
         q = q.filter(Zakazka.typ_sluzby == f_typ)
     if hledat:
@@ -146,7 +148,7 @@ def dashboard():
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
     return render_template("stav_zakazek.html", zakazky=zakazky, souhrn=souhrn,
-                           typy=typy, f_stav=f_stav, f_typ=f_typ, hledat=hledat,
+                           typy=typy, f_aktivita=f_aktivita, f_typ=f_typ, hledat=hledat,
                            mesice=_seznam_mesicu(), mesic=mesic, obdobi_popis=obdobi_popis)
 
 
@@ -177,6 +179,24 @@ def firma_nacist(id):
     flash(f"Načteno z {zdroj}." if ok else "Nepodařilo se načíst data (zkontroluj IČO / MERK klíč).",
           "info" if ok else "error")
     return redirect(url_for("main.firma_detail", id=id))
+
+
+@bp.route("/firmy/<int:id>/toggle", methods=["POST"])
+@login_required
+def firma_toggle(id):
+    f = Firma.query.get_or_404(id)
+    f.aktivni = not f.aktivni
+    db.session.commit()
+    return redirect(url_for("main.firma_detail", id=id))
+
+
+@bp.route("/zakazka/<int:id>/toggle", methods=["POST"])
+@login_required
+def zakazka_toggle(id):
+    z = Zakazka.query.get_or_404(id)
+    z.aktivni = not z.aktivni
+    db.session.commit()
+    return redirect(url_for("main.firma_detail", id=z.firma_id))
 
 
 @bp.route("/firmy/<int:id>/upravit", methods=["GET", "POST"])
@@ -228,6 +248,29 @@ def kontakt_upravit(id):
         flash("Kontakt uložen.", "info")
         return redirect(url_for("main.firma_detail", id=k.firma_id))
     return render_template("kontakt_upravit.html", k=k)
+
+
+@bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])
+@login_required
+def zakazka_upravit(id):
+    z = Zakazka.query.get_or_404(id)
+    if request.method == "POST":
+        rh = request.form.get("rozpocet_hodin", "").strip().replace(",", ".")
+        try:
+            z.rozpocet_hodin = float(rh) if rh else None
+        except ValueError:
+            z.rozpocet_hodin = z.rozpocet_hodin
+        z.stav = request.form.get("stav", z.stav)
+        for pole in ("datum_od", "datum_do"):
+            val = request.form.get(pole, "").strip()
+            try:
+                setattr(z, pole, datetime.strptime(val, "%Y-%m-%d").date() if val else None)
+            except ValueError:
+                pass
+        db.session.commit()
+        flash("Zakázka uložena.", "info")
+        return redirect(url_for("main.dashboard"))
+    return render_template("zakazka_upravit.html", z=z)
 
 
 @bp.route("/kontakt/<int:id>/smazat", methods=["POST"])

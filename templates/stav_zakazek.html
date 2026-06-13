@@ -31,10 +31,9 @@
     <option value="">Všechny typy služeb</option>
     {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t==f_typ }}>{{ t }}</option>{% endfor %}
   </select>
-  <select name="stav">
-    <option value="">Všechny stavy</option>
-    {% for s in ['aktivni','pozastaveno','dokonceno'] %}
-      <option value="{{ s }}" {{ 'selected' if s==f_stav }}>{{ s|capitalize }}</option>
+  <select name="aktivita">
+    {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
+      <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>
     {% endfor %}
   </select>
   <button class="btn" type="submit">Filtrovat</button>
@@ -48,22 +47,27 @@
       <th style="text-align:right">Celkem</th>
       <th style="text-align:right">Fakt.</th>
       <th style="text-align:right">Nefakt.</th>
+      <th style="text-align:right">Rozpočet</th>
       <th>Stav / riziko</th>
     </tr>
   </thead>
   <tbody>
     {% for z in zakazky %}
     <tr>
-      <td><div>{{ z.nazev }}{% if z.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}</div><div class="code">{{ z.zkratka }}</div></td>
+      <td><div><a href="{{ url_for('main.zakazka_upravit', id=z.id) }}">{{ z.nazev }}</a>
+        {% if z.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
+        {% if not z.je_aktivni %} <span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}</div>
+        <div class="code">{{ z.zkratka }}</div></td>
       <td>{{ z.firma.nazev }}</td>
       <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
       <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>
       <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
       <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
+      <td style="text-align:right">{{ z.rozpocet_hodin or '—' }}</td>
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
+    <tr><td colspan="8" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
     {% endfor %}
   </tbody>
 </table>
