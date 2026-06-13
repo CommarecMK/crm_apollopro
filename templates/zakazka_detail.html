@@ -58,6 +58,44 @@
   </table>
 </div>
 
+{% if z.typ_rozpoctu == 'jednorazovy' %}
+<div class="stat" style="margin-top:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Fakturace (nárazový prodej)</h3>
+  {% if vidi_finance() %}
+  <table style="box-shadow:none">
+    <thead><tr><th>Datum</th><th>Popis</th><th style="text-align:right">Částka (Kč)</th>{% if smi_zakazky() %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+      {% for f in z.faktury %}
+      <tr>
+        <td>{{ f.datum.strftime('%-d. %-m. %Y') }}</td>
+        <td>{{ f.popis or '—' }}</td>
+        <td style="text-align:right"><b>{{ "{:,.0f}".format(f.castka).replace(",", " ") }}</b></td>
+        {% if smi_zakazky() %}<td style="text-align:right">
+          <form method="post" action="{{ url_for('main.faktura_smazat', id=f.id) }}" style="display:inline" onsubmit="return confirm('Smazat fakturu?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
+          </form></td>{% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted" style="text-align:center;padding:16px">Zatím žádné faktury.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if smi_zakazky() %}
+  <form method="post" action="{{ url_for('main.faktura_nova', id=z.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="date" name="datum" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+    <input type="text" name="castka" placeholder="Částka Kč" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+    <input type="text" name="popis" placeholder="Popis (např. dodávka obalů)" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px;min-width:220px">
+    <button class="btn" type="submit">+ Přidat fakturu</button>
+  </form>
+  {% endif %}
+  {% else %}
+  <p class="muted" style="font-size:13px">Hodiny u této zakázky jsou náklad. Fakturace je v jednotlivých fakturách (vidí role s financemi).</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const G = {{ graf|tojson }};

@@ -9,7 +9,16 @@ from flask import (Blueprint, render_template, request, redirect,
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from ..extensions import db, COMPANY_ICO
-from ..models import Zakazka, Firma, Kontakt, User
+from ..models import Zakazka, Firma, Kontakt, User, Faktura
+
+
+def _napln_faktury(zakazky, mesic_keys):
+    """U zakázek typu 'jednorazovy' nastaví ._faktury = součet faktur ve zvoleném období."""
+    keys = set(mesic_keys)
+    for z in zakazky:
+        if z.typ_rozpoctu == "jednorazovy":
+            z._faktury = round(sum(f.castka for f in z.faktury
+                                   if f.datum and f.datum.strftime("%Y-%m") in keys))
 
 
 def _bez_internich(q):
@@ -170,6 +179,7 @@ def prehled():
         z.hodiny = z.hodiny_bill
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+    _napln_faktury(zakazky, mesice_rok)
 
     aktivni_zkr = {z.zkratka for z in zakazky}
     bill_mesic, trzby_mesic = [], []
@@ -283,6 +293,8 @@ def dashboard():
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         # měsíční rozpočet = počet aktivních měsíců projektu (od datum_od) ve zvoleném období
         z._pocet_mesicu = sum(1 for (r, m) in months if _aktivni_mesic(r, m, z.datum_od, z.datum_do))
+    _napln_faktury(zakazky, mesic_keys)
+    for z in zakazky:
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
 
     typy = sorted({z.typ_sluzby for z in Zakazka.query.all() if z.typ_sluzby})
@@ -503,6 +515,7 @@ def firma_detail(id):
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+    _napln_faktury(firma.zakazky, mesice_rok)
 
     # Graf, KPI a hodiny lidí = JEN AKTIVNÍ zakázky
     aktivni = [z for z in firma.zakazky if z.je_aktivni]
@@ -628,6 +641,7 @@ def zakazka_detail(id):
     # KPI/vyčerpání: u fixního projektového kumulativně od začátku projektu, jinak letošní rok
     z.hodiny, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, [f"{now.year}-{m:02d}" for m in mesice])
     z.hodiny_nonbill = round(max(z.hodiny - z.hodiny_bill, 0), 1)
+    _napln_faktury([z], [f"{now.year}-{m:02d}" for m in mesice])
 
     def _rozp_mesic(m):
         if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_mesic:
@@ -656,6 +670,36 @@ def zakazka_pm(id):
     db.session.commit()
     flash(f"PM nastaven: {z.projektovy_manazer or '—'}", "info")
     return redirect(url_for("main.zakazka_detail", id=id))
+
+
+@bp.route("/zakazka/<int:id>/faktura/nova", methods=["POST"])
+@zakazky_required
+def faktura_nova(id):
+    Zakazka.query.get_or_404(id)
+    castka = request.form.get("castka", "").strip().replace(",", ".").replace(" ", "")
+    datum = request.form.get("datum", "").strip()
+    try:
+        d = datetime.strptime(datum, "%Y-%m-%d").date()
+        c = float(castka)
+    except ValueError:
+        flash("Vyplň datum a částku.", "error")
+        return redirect(url_for("main.zakazka_detail", id=id))
+    db.session.add(Faktura(zakazka_id=id, datum=d, castka=c,
+                           popis=request.form.get("popis", "").strip()))
+    db.session.commit()
+    flash("Faktura přidána.", "info")
+    return redirect(url_for("main.zakazka_detail", id=id))
+
+
+@bp.route("/faktura/<int:id>/smazat", methods=["POST"])
+@zakazky_required
+def faktura_smazat(id):
+    f = Faktura.query.get_or_404(id)
+    zid = f.zakazka_id
+    db.session.delete(f)
+    db.session.commit()
+    flash("Faktura smazána.", "info")
+    return redirect(url_for("main.zakazka_detail", id=zid))
 
 
 @bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])

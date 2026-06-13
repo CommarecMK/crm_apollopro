@@ -68,6 +68,16 @@ class User(db.Model):
         return self.role == "admin"
 
 
+class Faktura(db.Model):
+    """Jednotlivá faktura / nárazový prodej u zakázky typu 'jednorazovy'."""
+    __tablename__ = "faktura"
+    id         = db.Column(db.Integer, primary_key=True)
+    zakazka_id = db.Column(db.Integer, db.ForeignKey("zakazka.id"), nullable=False)
+    datum      = db.Column(db.Date, nullable=False)
+    castka     = db.Column(db.Float, nullable=False, default=0)
+    popis      = db.Column(db.String(200))
+
+
 class Snapshot(db.Model):
     """Denní snímek dat z Clockify (JSON). Stránky čtou odtud → rychlé načítání."""
     __tablename__ = "snapshot"
@@ -99,6 +109,9 @@ class Zakazka(db.Model):
 
     firma_id    = db.Column(db.Integer, db.ForeignKey("firma.id"), nullable=False)
     firma       = db.relationship("Firma", back_populates="zakazky", lazy="joined")
+    faktury     = db.relationship("Faktura", backref="zakazka", lazy=True,
+                                  cascade="all, delete-orphan",
+                                  order_by="Faktura.datum.desc()")
 
     @property
     def display_klient(self):
@@ -127,7 +140,10 @@ class Zakazka(db.Model):
     @property
     def rozpocet_hodin_efekt(self):
         """Rozpočet hodin za zvolené období. Měsíční × počet měsíců; u projektového
-        buď zadaný rozpočet hodin, nebo dopočet z pevné částky ÷ hodinová sazba."""
+        buď zadaný rozpočet hodin, nebo dopočet z pevné částky ÷ hodinová sazba.
+        U jednorázové fakturace rozpočet hodin není (hodiny = náklad)."""
+        if self.typ_rozpoctu == "jednorazovy":
+            return None
         if self.typ_rozpoctu == "mesicni":
             return (self.rozpocet_hodin_mesic or 0) * self._mesicu if self.rozpocet_hodin_mesic else None
         if self.rozpocet_hodin:
@@ -149,6 +165,8 @@ class Zakazka(db.Model):
     @property
     def trzba_plan(self):
         """Plánovaná tržba za zvolené období. Měsíční × počet měsíců, jinak celková (fond)."""
+        if self.typ_rozpoctu == "jednorazovy":
+            return 0  # nárazové prodeje neplánujeme
         if self.typ_rozpoctu == "mesicni":
             return (self.rozpocet_hodin_mesic or 0) * self._mesicu * (self.hodinova_sazba or 0)
         if self.typ_rozpoctu == "analyza":
@@ -160,6 +178,8 @@ class Zakazka(db.Model):
         """Skutečná (vyčerpaná) tržba = FAKTUROVATELNÉ hodiny × efektivní sazba.
         U projektového s pevnou částkou se odkrajuje z částky (max do její výše).
         U analýzy dle milníků 40/60."""
+        if self.typ_rozpoctu == "jednorazovy":
+            return getattr(self, "_faktury", 0) or 0  # součet faktur za období (nastaví route)
         if self.typ_rozpoctu == "analyza":
             c = self.budget_castka or 0
             return (0.4 if self.analyza_zaloha else 0) * c + (0.6 if self.analyza_odevzdano else 0) * c
