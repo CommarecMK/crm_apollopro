@@ -86,6 +86,22 @@
       font-size:14px;cursor:pointer;white-space:nowrap}
     .dd-panel label:hover{background:var(--n9)}
     .dd-panel input{width:16px;height:16px}
+    /* Dvousloupcové rozvržení (na mobilu → jeden sloupec) */
+    .cols2{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start}
+    .cols11{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+    /* Tabulky: vodorovné rolování jen uvnitř obalu */
+    .tabulka{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    /* ── Responzivita: mobil / tablet / půlobrazovka ── */
+    @media (max-width:860px){
+      .cols2,.cols11{grid-template-columns:1fr}
+      .wrap{padding:16px}
+      .navbar{padding:12px 16px;flex-wrap:wrap;gap:6px 14px}
+      .navbar > div{flex-wrap:wrap;gap:10px 14px !important}
+      table{display:block;overflow-x:auto;white-space:nowrap}
+      .filters{gap:8px}
+      .stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+      h1{font-size:24px !important}
+    }
   </style>
 </head>
 <body>
