@@ -418,6 +418,49 @@ def pm_prehled():
     return render_template("pm.html", radky=radky, graf=graf, rok=now.year, updated=updated)
 
 
+@bp.route("/pm/<path:jmeno>")
+@finance_required
+def pm_detail(jmeno):
+    """Profil projektového manažera — jeho zakázky, klienti, plán/fakturováno/potenciál."""
+    now = datetime.now(timezone.utc)
+    snap, updated = snapshot.nacti()
+    hod = snap.get("hodiny", {})
+    mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
+    vsechny = _bez_internich(Zakazka.query.join(Firma)
+              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    if jmeno == "— bez PM —":
+        zakazky = [z for z in vsechny if not (z.projektovy_manazer or "").strip()]
+    else:
+        zakazky = [z for z in vsechny if (z.projektovy_manazer or "").strip() == jmeno]
+
+    for z in zakazky:
+        _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
+        z.hodiny = z.hodiny_bill
+        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
+                              if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        z._fakt, z._pot, z._plan = _fin_mesicne(z, hod, now.month, now.year)
+        z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
+    zakazky.sort(key=lambda z: -z._plan)
+
+    # Měsíční stacked (fakturováno + potenciál)
+    fin_fakt, fin_pot = [], []
+    for m in range(1, now.month + 1):
+        ym, key = (now.year, m), f"{now.year}-{m:02d}"
+        plan_m = sum(_plan_mesic(z, ym) for z in zakazky)
+        fakt_m = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in zakazky)
+        fakt_m += sum(f.castka for z in zakazky for f in z.faktury
+                      if f.datum and f.datum.strftime("%Y-%m") == key)
+        fin_fakt.append(round(fakt_m))
+        fin_pot.append(round(max(plan_m - fakt_m, 0)))
+    graf = {"labels": [MESICE_ZKR[m] for m in range(1, now.month + 1)], "fakt": fin_fakt, "pot": fin_pot}
+    kpi = {"zakazek": len(zakazky), "klientu": len({z.firma_id for z in zakazky}),
+           "hodin": round(sum(z.hodiny_bill for z in zakazky), 1),
+           "plan": sum(z._plan for z in zakazky),
+           "trzby": sum(fin_fakt), "potencial": sum(fin_pot)}
+    return render_template("pm_detail.html", jmeno=jmeno, zakazky=zakazky, graf=graf,
+                           kpi=kpi, rok=now.year, updated=updated)
+
+
 @bp.route("/cashflow")
 @finance_required
 def cashflow():

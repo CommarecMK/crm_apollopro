@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.pm_prehled') }}">← Projektoví manažeři</a></p>
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">{{ jmeno }}</h1>
+<p class="muted" style="margin-bottom:18px">Profil PM · rok {{ rok }}
+  {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
+
+<div class="stats">
+  <div class="stat"><div class="num">{{ kpi.zakazek }}</div><div class="lbl">Zakázek</div></div>
+  <div class="stat"><div class="num">{{ kpi.klientu }}</div><div class="lbl">Klientů</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin }}</div><div class="lbl">Fakt. hodin</div></div>
+  <div class="stat"><div class="num" style="color:var(--navy)">{{ "{:,.0f}".format(kpi.plan).replace(",", " ") }}</div><div class="lbl">Plán dle smlouvy Kč</div></div>
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Fakturováno Kč</div></div>
+  <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
+</div>
+
+<div class="stat" style="margin-bottom:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno + nenaplněný potenciál (= plán) — {{ rok }}</h3>
+  <canvas id="grafPmD" height="90"></canvas>
+</div>
+
+<table>
+  <thead><tr>
+    <th>Klient</th><th>Zakázka</th><th class="skryt-mobil">Typ</th>
+    <th style="text-align:right">Fakt. h</th>
+    <th style="text-align:right" class="skryt-mobil">Plán (Kč)</th>
+    <th style="text-align:right">Fakturováno (Kč)</th>
+    <th style="text-align:right">Potenciál (Kč)</th>
+    <th class="skryt-mobil">Termín</th><th>Riziko</th>
+  </tr></thead>
+  <tbody>
+    {% for z in zakazky %}
+    <tr>
+      <td><a href="{{ url_for('main.firma_detail', id=z.firma_id) }}">{{ z.firma.nazev }}</a></td>
+      <td><a href="{{ url_for('main.zakazka_detail', id=z.id) }}">{{ z.nazev }}</a></td>
+      <td class="skryt-mobil"><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+      <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
+      <td style="text-align:right;color:var(--navy)" class="skryt-mobil">{{ "{:,.0f}".format(z._plan).replace(",", " ") if z._plan else '—' }}</td>
+      <td style="text-align:right">{{ "{:,.0f}".format(z._fakt).replace(",", " ") if z._fakt else '—' }}</td>
+      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(z._pot).replace(",", " ") if z._pot else '—' }}</td>
+      <td class="skryt-mobil">{{ z.datum_do.strftime('%-d. %-m. %Y') if z.datum_do else '—' }}</td>
+      <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const P = {{ graf|tojson }};
+if (document.getElementById('grafPmD')) new Chart(document.getElementById('grafPmD'), {
+  type:'bar',
+  data:{labels:P.labels, datasets:[
+    {label:'Fakturováno', data:P.fakt, backgroundColor:'#34C759'},
+    {label:'Nenaplněný potenciál', data:P.pot, backgroundColor:'#FF383C'}
+  ]},
+  options:{responsive:true, plugins:{legend:{position:'bottom'},
+    tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
+    scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true}}}
+});
+</script>
+{% endblock %}
