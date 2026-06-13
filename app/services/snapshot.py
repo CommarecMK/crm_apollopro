@@ -65,16 +65,11 @@ def obnov():
                 if t or b:
                     hodiny.setdefault(zkr, {})[key] = [round(t, 1), round(b, 1)]
 
-        # Hodiny po zaměstnancích — jen za aktivní zakázky (YTD aktuální rok)
+        # Hodiny po zaměstnancích — jedním dotazem pro všechny klienty (YTD aktuální rok)
         now = datetime.now(timezone.utc)
         od_rok = f"{now.year}-01-01T00:00:00Z"
         do_ted = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        aktivni_zkr = {z.zkratka for z in Zakazka.query.filter(Zakazka.aktivni.is_(True)).all()}
-        uzivatele = {}
-        for zkr in aktivni_zkr:
-            u = clockify.hodiny_dle_uzivatelu(zkr, od_rok, do_ted)
-            if u:
-                uzivatele[zkr] = u
+        uzivatele = clockify.uzivatele_vsech_klientu(od_rok, do_ted)
 
         data = {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "mesice": labels, "hodiny": hodiny, "uzivatele": uzivatele}
