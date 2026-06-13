@@ -99,6 +99,7 @@
       <a class="logout" href="{{ url_for('main.prehled') }}">Přehled</a>
       <a class="logout" href="{{ url_for('main.dashboard') }}">Stav zakázek</a>
       <a class="logout" href="{{ url_for('main.firmy') }}">Firmy</a>
+      <a class="logout" href="{{ url_for('main.interni') }}">Interní</a>
       {% if je_admin() %}<a class="logout" href="{{ url_for('main.admin_uzivatele') }}">Uživatelé</a>{% endif %}
       <span class="sub">{{ session.get('user_name') }}</span>
       <a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>

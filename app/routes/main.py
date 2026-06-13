@@ -8,8 +8,17 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 
 from werkzeug.security import check_password_hash, generate_password_hash
-from ..extensions import db
+from ..extensions import db, COMPANY_ICO
 from ..models import Zakazka, Firma, Kontakt, User
+
+
+def _bez_internich(q):
+    """Odfiltruje interní zakázky (pod IČO Commarecu)."""
+    return q.filter(db.or_(Firma.ico.is_(None), Firma.ico != COMPANY_ICO))
+
+
+def _jen_interni(q):
+    return q.filter(Firma.ico == COMPANY_ICO)
 from ..auth import login_required, klient_required, zakazky_required, admin_required
 from ..services import clockify, firmy as firmy_service, snapshot
 
@@ -135,7 +144,7 @@ def _vyhodnot_riziko(z):
     rozpocet = z.rozpocet_hodin_efekt
     if not rozpocet:
         return ("neutral", "Bez rozpočtu hodin")
-    pct = round(100 * (z.hodiny or 0) / rozpocet)
+    pct = round(100 * (z.hodiny_bill or 0) / rozpocet)  # jen fakturovatelné
     if pct >= 100:
         return ("cervena", f"Přečerpáno ({pct} %)")
     if pct >= 85:
@@ -150,8 +159,8 @@ def prehled():
     now = datetime.now(timezone.utc)
     snap, updated = snapshot.nacti()
     hod = snap.get("hodiny", {})
-    zakazky = (Zakazka.query.join(Firma)
-               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True)).all())
+    zakazky = _bez_internich(Zakazka.query.join(Firma)
+               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
     sazby = {z.zkratka: z.efekt_sazba for z in zakazky}
 
@@ -248,7 +257,7 @@ def dashboard():
     mesic_keys = [f"{r}-{m:02d}" for r, m in months]
     snap, updated = snapshot.nacti()
 
-    q = Zakazka.query.join(Firma)
+    q = _bez_internich(Zakazka.query.join(Firma))
     if f_aktivita == "aktivni":   # aktivní zakázka i aktivní klient
         q = q.filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))
     elif f_aktivita == "neaktivni":  # zakázka NEBO klient neaktivní
@@ -292,6 +301,28 @@ def dashboard():
                            typy=typy, f_aktivita=f_aktivita, f_typy=f_typy, hledat=hledat,
                            mesice=_seznam_mesicu(), f_mesice=f_mesice, obdobi_popis=obdobi_popis,
                            updated=updated)
+
+
+@bp.route("/interni")
+@login_required
+def interni():
+    """Interní hodiny (projekty pod IČO Commarecu) — samostatná karta."""
+    now = datetime.now(timezone.utc)
+    snap, updated = snapshot.nacti()
+    hod = snap.get("hodiny", {})
+    mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
+    zakazky = _jen_interni(Zakazka.query.join(Firma).filter(Zakazka.aktivni.is_(True))).all()
+    for z in zakazky:
+        tot, bill = snapshot.hodiny_zkr(snap, z.zkratka, mesice_rok)
+        z.hodiny, z.hodiny_bill = tot, bill
+    zkr_set = {z.zkratka for z in zakazky}
+    serie = [round(sum(hod.get(zk, {}).get(mm, [0, 0])[0] for zk in zkr_set), 1) for mm in mesice_rok]
+    graf = {"labels": [MESICE_CZ[int(mm[5:7])][:3] for mm in mesice_rok], "hodiny": serie}
+    uzivatele = snapshot.uzivatele_zkr(snap, zkr_set)
+    celkem = round(sum(z.hodiny for z in zakazky), 1)
+    zakazky.sort(key=lambda z: -z.hodiny)
+    return render_template("interni.html", zakazky=zakazky, graf=graf, uzivatele=uzivatele,
+                           celkem=celkem, rok=now.year, updated=updated)
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────

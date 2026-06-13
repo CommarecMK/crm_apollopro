@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Interní hodiny</h1>
+<p class="muted" style="margin-bottom:18px">Projekty Commarecu (ne klientské) · rok {{ rok }}
+  {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
+
+<div class="stats">
+  <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ celkem }}</div><div class="lbl">Interních hodin (rok)</div></div>
+  <div class="stat"><div class="num">{{ zakazky|length }}</div><div class="lbl">Interních oblastí</div></div>
+</div>
+
+<div class="stat" style="margin-bottom:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Interní hodiny po měsících — {{ rok }}</h3>
+  <canvas id="grafInt" height="90"></canvas>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+  <div>
+    <h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Oblasti</h2>
+    <table>
+      <thead><tr><th>Oblast</th><th style="text-align:right">Hodin (rok)</th></tr></thead>
+      <tbody>
+        {% for z in zakazky %}
+        <tr><td>{{ z.nazev }} <span class="code">{{ z.zkratka }}</span></td>
+          <td style="text-align:right"><b>{{ z.hodiny }}</b></td></tr>
+        {% else %}
+        <tr><td colspan="2" class="muted" style="text-align:center;padding:20px">Žádné interní hodiny.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Podle zaměstnanců</h2>
+    <table>
+      <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Hodin</th></tr></thead>
+      <tbody>
+        {% for jmeno, celkem_h, bill in uzivatele %}
+        <tr><td>{{ jmeno }}</td><td style="text-align:right">{{ celkem_h }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="muted" style="text-align:center;padding:20px">Žádná data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<p class="muted" style="font-size:12px;margin-top:16px">Toto je první verze interního přehledu — rozpracujeme podle toho, co bude dávat smysl sledovat.</p>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const GI = {{ graf|tojson }};
+if (document.getElementById('grafInt')) new Chart(document.getElementById('grafInt'), {
+  type:'bar',
+  data:{labels:GI.labels, datasets:[{label:'Interní hodiny', data:GI.hodiny, backgroundColor:'#00AFF0'}]},
+  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}
+});
+</script>
+{% endblock %}
