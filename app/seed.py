@@ -33,11 +33,12 @@ def seed_pokud_prazdno():
         nazev = str(row[1]).strip() if row[1] else zkratka
         firma_nazev = str(row[2]).strip() if len(row) > 2 and row[2] else "Neznámá firma"
 
+        ico = zkratka.split("_")[0]
         firma = firmy_cache.get(firma_nazev)
         if not firma:
             firma = Firma.query.filter_by(nazev=firma_nazev).first()
             if not firma:
-                firma = Firma(nazev=firma_nazev)
+                firma = Firma(nazev=firma_nazev, ico=ico)
                 db.session.add(firma)
                 db.session.flush()
             firmy_cache[firma_nazev] = firma
@@ -50,3 +51,16 @@ def seed_pokud_prazdno():
 
     db.session.commit()
     print(f"[seed] Naimportováno {pocet} zakázek, {len(firmy_cache)} firem.")
+
+
+def backfill_ico():
+    """Doplní IČO firmám, které ho nemají (z prefixu zkratky jejich zakázky)."""
+    zmeneno = 0
+    for f in Firma.query.filter((Firma.ico.is_(None)) | (Firma.ico == "")).all():
+        z = Zakazka.query.filter_by(firma_id=f.id).first()
+        if z and z.ico:
+            f.ico = z.ico
+            zmeneno += 1
+    if zmeneno:
+        db.session.commit()
+        print(f"[backfill] Doplněno IČO u {zmeneno} firem.")

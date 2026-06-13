@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p style="margin-bottom:6px"><a href="{{ url_for('main.firmy') }}">← Firmy</a></p>
+<h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
+  {{ firma.nazev }}{% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
+</h1>
+<p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}</p>
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
+  <div>
+    <!-- Údaje o firmě -->
+    <div class="stat" style="margin-bottom:18px">
+      <table style="box-shadow:none">
+        <tbody>
+          <tr><td style="width:160px;color:#667">Adresa</td><td>{{ firma.adresa or '—' }}</td></tr>
+          <tr><td style="color:#667">Web</td><td>{% if firma.web %}<a href="{{ firma.web }}" target="_blank">{{ firma.web }}</a>{% else %}—{% endif %}</td></tr>
+          <tr><td style="color:#667">Obor</td><td>{{ firma.obor or '—' }}</td></tr>
+          <tr><td style="color:#667">Zaměstnanci</td><td>{{ firma.zamestnanci or '—' }}</td></tr>
+          <tr><td style="color:#667">Obrat</td><td>{{ firma.obrat or '—' }}</td></tr>
+          <tr><td style="color:#667">Doplněno</td><td class="muted">{{ firma.merk_nacteno or 'zatím nenačteno' }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Kontakty -->
+    <h2 style="color:var(--navy);font-size:18px;margin:8px 0 10px">Kontakty</h2>
+    <table>
+      <thead><tr><th>Jméno</th><th>Pozice</th><th>E-mail</th><th>Telefon</th><th>Zdroj</th></tr></thead>
+      <tbody>
+        {% for k in firma.kontakty %}
+        <tr><td><b>{{ k.jmeno }}</b></td><td>{{ k.pozice or '—' }}</td>
+          <td>{{ k.email or '—' }}</td><td>{{ k.telefon or '—' }}</td>
+          <td><span class="tag">{{ k.zdroj }}</span></td></tr>
+        {% else %}
+        <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Zatím žádné kontakty. Načti je z MERK.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Zakázky firmy -->
+    <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
+    <table>
+      <thead><tr><th>Zakázka</th><th>Typ</th><th>Stav</th></tr></thead>
+      <tbody>
+        {% for z in firma.zakazky %}
+        <tr><td>{{ z.nazev }} <span class="code">{{ z.zkratka }}</span></td>
+          <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td><td>{{ z.stav }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Akce -->
+  <div class="stat">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Doplnit data</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">
+      Natáhne adresu, obor, obrat a kontakty z registru podle IČO (MERK, případně ARES).
+    </p>
+    <form method="post" action="{{ url_for('main.firma_nacist', id=firma.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit" {{ 'disabled' if not firma.ico }}>Načíst z MERK / ARES</button>
+    </form>
+    {% if not firma.ico %}<p class="muted" style="font-size:12px;margin-top:8px">Chybí IČO.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

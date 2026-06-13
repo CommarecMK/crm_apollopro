@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h1 style="color:var(--navy);font-size:30px;margin-bottom:18px">Stav zakázek</h1>
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Stav zakázek</h1>
+<p class="muted" style="margin-bottom:18px">Období: <b>{{ obdobi_popis }}</b></p>
 
 {% if not souhrn.clockify_ok %}
 <div class="note">
@@ -13,7 +14,7 @@
 <div class="stats">
   <div class="stat"><div class="num">{{ souhrn.pocet }}</div><div class="lbl">Zakázek</div></div>
   <div class="stat"><div class="num">{{ souhrn.pocet_firem }}</div><div class="lbl">Firem</div></div>
-  <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin {{ rok }} celkem</div></div>
+  <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin celkem</div></div>
   <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.celkem_bill }}</div><div class="lbl">Fakturovatelné</div></div>
   <div class="stat"><div class="num" style="color:var(--orange)">{{ souhrn.celkem_nonbill }}</div><div class="lbl">Nefakturovatelné</div></div>
   <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
@@ -22,6 +23,10 @@
 
 <form class="filters" method="get">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo zkratku…">
+  <select name="mesic">
+    <option value="">Celý rok</option>
+    {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val==mesic }}>{{ popis }}</option>{% endfor %}
+  </select>
   <select name="typ">
     <option value="">Všechny typy služeb</option>
     {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t==f_typ }}>{{ t }}</option>{% endfor %}
@@ -64,6 +69,6 @@
 </table>
 
 <p class="muted" style="font-size:12px;margin-top:14px">
-  Návrh ke kontrole. Hodiny z Clockify za rok {{ rok }}. Rozpočty hodin doplníme z nabídek ve fázi 2.
+  Návrh ke kontrole. Hodiny z Clockify za období: {{ obdobi_popis }}. Rozpočty hodin doplníme z nabídek.
 </p>
 {% endblock %}

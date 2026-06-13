@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:18px">Firmy</h1>
+
+<form class="filters" method="get">
+  <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo IČO…">
+  <button class="btn" type="submit">Hledat</button>
+  <a class="btn btn-ghost" href="{{ url_for('main.firmy') }}">Zrušit</a>
+</form>
+
+<table>
+  <thead>
+    <tr><th>Firma</th><th>IČO</th><th>Obor</th><th>Zakázek</th><th>Kontaktů</th><th>Doplněno</th></tr>
+  </thead>
+  <tbody>
+    {% for f in firmy %}
+    <tr>
+      <td><a href="{{ url_for('main.firma_detail', id=f.id) }}"><b>{{ f.nazev }}</b></a>
+        {% if f.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}</td>
+      <td class="code">{{ f.ico or '—' }}</td>
+      <td>{{ f.obor or '—' }}</td>
+      <td>{{ f.zakazky|length }}</td>
+      <td>{{ f.kontakty|length }}</td>
+      <td class="muted" style="font-size:12px">{{ f.merk_nacteno or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted" style="text-align:center;padding:30px">Žádné firmy.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

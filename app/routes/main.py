@@ -2,16 +2,47 @@
 routes/main.py — přihlášení + kokpit "Stav zakázek".
 """
 import os
+import calendar
 from datetime import datetime, timezone
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 
 from ..extensions import db, ADMIN_PASSWORD
-from ..models import Zakazka
+from ..models import Zakazka, Firma
 from ..auth import login_required
-from ..services import clockify
+from ..services import clockify, firmy as firmy_service
 
 bp = Blueprint("main", __name__)
+
+MESICE_CZ = ["", "leden", "únor", "březen", "duben", "květen", "červen",
+             "červenec", "srpen", "září", "říjen", "listopad", "prosinec"]
+
+
+def _obdobi(mesic):
+    """Z parametru 'YYYY-MM' vrátí (od, do, popis). Prázdné = celý aktuální rok."""
+    now = datetime.now(timezone.utc)
+    if mesic and "-" in mesic:
+        rok, m = (int(x) for x in mesic.split("-"))
+        posl = calendar.monthrange(rok, m)[1]
+        od = f"{rok}-{m:02d}-01T00:00:00Z"
+        do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
+        return od, do, f"{MESICE_CZ[m]} {rok}"
+    return (f"{now.year}-01-01T00:00:00Z",
+            now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            f"rok {now.year}")
+
+
+def _seznam_mesicu(pocet=14):
+    """Vrátí list (hodnota, popis) posledních N měsíců pro rozbalovátko."""
+    now = datetime.now(timezone.utc)
+    out = []
+    r, m = now.year, now.month
+    for _ in range(pocet):
+        out.append((f"{r}-{m:02d}", f"{MESICE_CZ[m]} {r}"))
+        m -= 1
+        if m == 0:
+            m, r = 12, r - 1
+    return out
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -87,10 +118,9 @@ def dashboard():
         q = q.filter(db.or_(Zakazka.nazev.ilike(like), Zakazka.zkratka.ilike(like)))
     zakazky = q.order_by(Zakazka.nazev).all()
 
-    # Hodiny z Clockify za aktuální rok
-    rok = datetime.now(timezone.utc).year
-    od = f"{rok}-01-01T00:00:00Z"
-    do = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Hodiny z Clockify za zvolené období (měsíc nebo celý rok)
+    mesic = request.args.get("mesic", "")
+    od, do, obdobi_popis = _obdobi(mesic)
     clockify.obohat_zakazky(zakazky, od, do)
 
     for z in zakazky:
@@ -109,4 +139,33 @@ def dashboard():
     }
     return render_template("stav_zakazek.html", zakazky=zakazky, souhrn=souhrn,
                            typy=typy, f_stav=f_stav, f_typ=f_typ, hledat=hledat,
-                           rok=rok)
+                           mesice=_seznam_mesicu(), mesic=mesic, obdobi_popis=obdobi_popis)
+
+
+# ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────
+@bp.route("/firmy")
+@login_required
+def firmy():
+    hledat = request.args.get("q", "").strip()
+    q = Firma.query
+    if hledat:
+        q = q.filter(db.or_(Firma.nazev.ilike(f"%{hledat}%"), Firma.ico.ilike(f"%{hledat}%")))
+    seznam = q.order_by(Firma.nazev).all()
+    return render_template("firmy.html", firmy=seznam, hledat=hledat)
+
+
+@bp.route("/firmy/<int:id>")
+@login_required
+def firma_detail(id):
+    firma = Firma.query.get_or_404(id)
+    return render_template("firma_detail.html", firma=firma)
+
+
+@bp.route("/firmy/<int:id>/nacist", methods=["POST"])
+@login_required
+def firma_nacist(id):
+    firma = Firma.query.get_or_404(id)
+    ok, zdroj = firmy_service.obohat_firmu(firma)
+    flash(f"Načteno z {zdroj}." if ok else "Nepodařilo se načíst data (zkontroluj IČO / MERK klíč).",
+          "info" if ok else "error")
+    return redirect(url_for("main.firma_detail", id=id))
