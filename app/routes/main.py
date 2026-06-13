@@ -49,6 +49,22 @@ def _plan_mesic(z, ym):
     return 0
 
 
+def _fin_mesicne(z, hod, do_mesic, rok):
+    """Měsíční finance zakázky: vrátí (fakturováno, nenaplněný_potenciál, plán) sečtené po měsících.
+    Potenciál se počítá v každém měsíci zvlášť (přeplněný měsíc nevynuluje nedotažený)."""
+    h = (hod or {}).get(z.zkratka, {})
+    fakt = pot = plan = 0
+    for m in range(1, do_mesic + 1):
+        ym, key = (rok, m), f"{rok}-{m:02d}"
+        p = _plan_mesic(z, ym)
+        f = h.get(key, [0, 0])[1] * z.efekt_sazba
+        f += sum(fa.castka for fa in z.faktury if fa.datum and fa.datum.strftime("%Y-%m") == key)
+        fakt += f
+        plan += p
+        pot += max(p - f, 0)
+    return round(fakt), round(pot), round(plan)
+
+
 def _bez_internich(q):
     """Odfiltruje interní zakázky (pod IČO Commarecu)."""
     return q.filter(db.or_(Firma.ico.is_(None), Firma.ico != COMPANY_ICO))
@@ -64,6 +80,8 @@ bp = Blueprint("main", __name__)
 
 MESICE_CZ = ["", "leden", "únor", "březen", "duben", "květen", "červen",
              "červenec", "srpen", "září", "říjen", "listopad", "prosinec"]
+MESICE_ZKR = ["", "led", "úno", "bře", "dub", "kvě", "čvn",
+              "čvc", "srp", "zář", "říj", "lis", "pro"]
 
 
 def _obdobi(mesic):
@@ -372,6 +390,7 @@ def pm_prehled():
     """Přehled podle projektových manažerů — kdo co táhne (hodiny, fakturováno, potenciál)."""
     now = datetime.now(timezone.utc)
     snap, updated = snapshot.nacti()
+    hod = snap.get("hodiny", {})
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
     zakazky = _bez_internich(Zakazka.query.join(Firma)
               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
@@ -379,15 +398,14 @@ def pm_prehled():
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
         z.hodiny = z.hodiny_bill
-        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
-                              if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        fakt, pot, plan = _fin_mesicne(z, hod, now.month, now.year)
         key = (z.projektovy_manazer or "").strip() or "— bez PM —"
         d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0})
         d["zakazek"] += 1
         d["hodin"] += z.hodiny_bill
-        d["trzby"] += z.trzba_skutecnost
-        d["potencial"] += z.nenaplneny_potencial
-        d["plan"] += z.trzba_plan
+        d["trzby"] += fakt
+        d["potencial"] += pot
+        d["plan"] += plan
     radky = sorted(pm.values(), key=lambda x: -x["plan"])
     for r in radky:
         r["hodin"] = round(r["hodin"], 1)
@@ -407,8 +425,8 @@ def cashflow():
     now = datetime.now(timezone.utc)
     snap, updated = snapshot.nacti()
     hod = snap.get("hodiny", {})
-    zakazky = _bez_internich(Zakazka.query.join(Firma)
-              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    # Cashflow počítá i s neaktivními projekty (historie fakturace patří do cashflow)
+    zakazky = _bez_internich(Zakazka.query.join(Firma)).all()
     teď = (now.year, now.month)
 
     def _add(y, m, delta):
@@ -438,7 +456,7 @@ def cashflow():
                         if f.datum and f.datum.strftime("%Y-%m") == key)
         potencial = max(plan - fakt, 0) if je_minulost_nebo_ted else 0
         radky.append({
-            "label": f"{MESICE_CZ[m]} {y}", "kratky": f"{MESICE_CZ[m][:3]} {str(y)[2:]}",
+            "label": f"{MESICE_CZ[m]} {y}", "kratky": f"{MESICE_ZKR[m]} {str(y)[2:]}",
             "obdobi": "minulost" if ym < teď else ("ted" if ym == teď else "vyhled"),
             "plan": round(plan), "fakt": round(fakt), "potencial": round(potencial),
         })
@@ -448,9 +466,14 @@ def cashflow():
         "vyhled": round(sum(r["plan"] for r in radky if r["obdobi"] == "vyhled")),
         "potencial": round(sum(r["potencial"] for r in radky)),
     }
-    graf = {"labels": [r["kratky"] for r in radky],
-            "fakt": [r["fakt"] for r in radky],
-            "zbytek": [max(r["plan"] - r["fakt"], 0) for r in radky]}
+    # Graf: minulost = fakturováno (zelená) + nenaplněný potenciál (červená);
+    #       budoucnost = plán, kolik můžeme udělat (modrá)
+    graf = {
+        "labels": [r["kratky"] for r in radky],
+        "fakt": [r["fakt"] if r["obdobi"] != "vyhled" else 0 for r in radky],
+        "pot": [r["potencial"] if r["obdobi"] != "vyhled" else 0 for r in radky],
+        "budouci": [r["plan"] if r["obdobi"] == "vyhled" else 0 for r in radky],
+    }
     return render_template("cashflow.html", radky=radky, graf=graf, kpi=kpi,
                            bez_terminu=bez_terminu, updated=updated)
 
@@ -567,6 +590,9 @@ def firma_detail(id):
         fin_pot.append(round(max(plan_m - fakt_m, 0)))
     graf_fin = {"labels": [MESICE_CZ[m][:3] for m in range(1, now.month + 1)],
                 "fakt": fin_fakt, "pot": fin_pot}
+    # KPI sladit s grafem (potenciál po měsících, ne ročně sečtený)
+    kpi["trzby"] = sum(fin_fakt)
+    kpi["potencial"] = sum(fin_pot)
     return render_template("firma_detail.html", firma=firma, graf=graf, graf_fin=graf_fin, kpi=kpi,
                            rok=now.year, uzivatele=uzivatele, pm_jmena=pm_jmena, updated=updated)
 

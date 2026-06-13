@@ -49,10 +49,11 @@ if (document.getElementById('grafCf')) new Chart(document.getElementById('grafCf
   type:'bar',
   data:{labels:CF.labels, datasets:[
     {label:'Fakturováno', data:CF.fakt, backgroundColor:'#34C759'},
-    {label:'Zbývá do plánu', data:CF.zbytek, backgroundColor:'#173767'}
+    {label:'Nenaplněný potenciál (minulost)', data:CF.pot, backgroundColor:'#FF383C'},
+    {label:'Budoucí plán', data:CF.budouci, backgroundColor:'#173767'}
   ]},
   options:{responsive:true, plugins:{legend:{position:'bottom'},
-    tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
+    tooltip:{callbacks:{footer:(it)=>'Celkem: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
     scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true}}}
 });
 </script>
