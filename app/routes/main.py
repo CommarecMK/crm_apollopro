@@ -382,16 +382,18 @@ def pm_prehled():
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
         key = (z.projektovy_manazer or "").strip() or "— bez PM —"
-        d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0})
+        d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0})
         d["zakazek"] += 1
         d["hodin"] += z.hodiny_bill
         d["trzby"] += z.trzba_skutecnost
         d["potencial"] += z.nenaplneny_potencial
-    radky = sorted(pm.values(), key=lambda x: -x["trzby"])
+        d["plan"] += z.trzba_plan
+    radky = sorted(pm.values(), key=lambda x: -x["plan"])
     for r in radky:
         r["hodin"] = round(r["hodin"], 1)
         r["trzby"] = round(r["trzby"])
         r["potencial"] = round(r["potencial"])
+        r["plan"] = round(r["plan"])
     graf = {"labels": [r["pm"] for r in radky],
             "trzby": [r["trzby"] for r in radky],
             "potencial": [r["potencial"] for r in radky]}
@@ -547,6 +549,7 @@ def firma_detail(id):
     kpi = {"pocet": len(aktivni),
            "hodin_bill": round(sum(z.hodiny_bill for z in aktivni), 1),
            "rozpocet_h": round(sum(rozpocet_mesic)),
+           "plan": round(sum(z.trzba_plan for z in aktivni)),
            "trzby": round(sum(z.trzba_skutecnost for z in aktivni)),
            "potencial": round(sum(z.nenaplneny_potencial for z in aktivni))}
     uzivatele = snapshot.uzivatele_zkr(snap, aktivni_zkr)

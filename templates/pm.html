@@ -13,7 +13,8 @@
 <table>
   <thead>
     <tr><th>Projektový manažer</th><th style="text-align:right">Zakázek</th>
-      <th style="text-align:right">Fakt. hodin</th><th style="text-align:right">Fakturováno (Kč)</th>
+      <th style="text-align:right">Fakt. hodin</th><th style="text-align:right">Plán dle smlouvy (Kč)</th>
+      <th style="text-align:right">Fakturováno (Kč)</th>
       <th style="text-align:right">Nenaplněný potenciál (Kč)</th></tr>
   </thead>
   <tbody>
@@ -22,11 +23,12 @@
       <td><b>{{ r.pm }}</b></td>
       <td style="text-align:right">{{ r.zakazek }}</td>
       <td style="text-align:right;color:var(--green)">{{ r.hodin }}</td>
+      <td style="text-align:right;color:var(--navy)">{{ "{:,.0f}".format(r.plan).replace(",", " ") }}</td>
       <td style="text-align:right">{{ "{:,.0f}".format(r.trzby).replace(",", " ") }}</td>
       <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(r.potencial).replace(",", " ") }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Zatím žádná data. Nastav PM u zakázek.</td></tr>
+    <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Zatím žádná data. Nastav PM u zakázek.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -49,7 +49,7 @@ if (document.getElementById('grafCf')) new Chart(document.getElementById('grafCf
   type:'bar',
   data:{labels:CF.labels, datasets:[
     {label:'Fakturováno', data:CF.fakt, backgroundColor:'#34C759'},
-    {label:'Zbývá do plánu', data:CF.zbytek, backgroundColor:'#FF383C'}
+    {label:'Zbývá do plánu', data:CF.zbytek, backgroundColor:'#173767'}
   ]},
   options:{responsive:true, plugins:{legend:{position:'bottom'},
     tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},

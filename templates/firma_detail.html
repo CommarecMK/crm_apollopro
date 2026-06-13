@@ -21,6 +21,7 @@
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
   {% if kpi.rozpocet_h %}<div class="stat"><div class="num">{{ kpi.rozpocet_h }}</div><div class="lbl">Rozpočet h dle smlouvy</div></div>{% endif %}
   {% if vidi_finance() %}
+  <div class="stat"><div class="num" style="color:var(--navy)">{{ "{:,.0f}".format(kpi.plan).replace(",", " ") }}</div><div class="lbl">Plán dle smlouvy Kč</div></div>
   <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
   <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenapln. potenciál Kč</div></div>
   {% endif %}
