@@ -21,6 +21,34 @@ def _napln_faktury(zakazky, mesic_keys):
                                    if f.datum and f.datum.strftime("%Y-%m") in keys))
 
 
+def _mesicu_mezi(od, do):
+    return (do.year - od.year) * 12 + (do.month - od.month) + 1
+
+
+def _plan_mesic(z, ym):
+    """Plánovaná fakturace zakázky v daném měsíci ym=(rok,měsíc)."""
+    if z.datum_od and ym < (z.datum_od.year, z.datum_od.month):
+        return 0
+    if z.datum_do and ym > (z.datum_do.year, z.datum_do.month):
+        return 0
+    if z.typ_rozpoctu == "mesicni":
+        return (z.rozpocet_hodin_mesic or 0) * (z.hodinova_sazba or 0)
+    if z.typ_rozpoctu == "analyza":
+        c = z.budget_castka or 0
+        if z.datum_od and ym == (z.datum_od.year, z.datum_od.month):
+            return 0.4 * c
+        if z.datum_do and ym == (z.datum_do.year, z.datum_do.month):
+            return 0.6 * c
+        return 0
+    if z.typ_rozpoctu == "jednorazovy":
+        return 0  # nárazové prodeje neplánujeme
+    total = z.budget_castka or (z.rozpocet_hodin or 0) * (z.hodinova_sazba or 0)
+    if total and z.datum_od and z.datum_do:
+        n = _mesicu_mezi(z.datum_od, z.datum_do)
+        return total / n if n > 0 else 0
+    return 0
+
+
 def _bez_internich(q):
     """Odfiltruje interní zakázky (pod IČO Commarecu)."""
     return q.filter(db.or_(Firma.ico.is_(None), Firma.ico != COMPANY_ICO))
@@ -426,6 +454,9 @@ def cashflow():
         fakt = 0
         if je_minulost_nebo_ted:
             fakt = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in zakazky)
+            # jednorázové faktury (nárazový prodej) v daném měsíci
+            fakt += sum(f.castka for z in zakazky for f in z.faktury
+                        if f.datum and f.datum.strftime("%Y-%m") == key)
         potencial = max(plan - fakt, 0) if je_minulost_nebo_ted else 0
         radky.append({
             "label": f"{MESICE_CZ[m]} {y}", "kratky": f"{MESICE_CZ[m][:3]} {str(y)[2:]}",

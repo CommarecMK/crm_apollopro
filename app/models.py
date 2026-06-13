@@ -156,6 +156,8 @@ class Zakazka(db.Model):
     def efekt_sazba(self):
         """Efektivní sazba Kč/h. Když není zadaná hodinová sazba, ale u projektového je
         pevná částka + odhad hodin, dopočítá se jako částka ÷ rozpočet hodin (odkrajuje z částky)."""
+        if self.typ_rozpoctu == "jednorazovy":
+            return 0  # tržba je z faktur, ne z hodin (hodiny = náklad)
         if self.hodinova_sazba:
             return self.hodinova_sazba
         if self.typ_rozpoctu == "projektovy" and self.budget_castka and self.rozpocet_hodin:

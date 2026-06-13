@@ -40,8 +40,9 @@ if (document.getElementById('grafPm') && P.labels.length) new Chart(document.get
     {label:'Fakturováno', data:P.trzby, backgroundColor:'#34C759'},
     {label:'Nenaplněný potenciál', data:P.potencial, backgroundColor:'#FF383C'}
   ]},
-  options:{responsive:true, plugins:{legend:{position:'bottom'}},
-    scales:{x:{stacked:false}, y:{beginAtZero:true}}}
+  options:{responsive:true, plugins:{legend:{position:'bottom'},
+    tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
+    scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true}}}
 });
 </script>
 {% endblock %}
