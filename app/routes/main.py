@@ -8,7 +8,7 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 
 from ..extensions import db, ADMIN_PASSWORD
-from ..models import Zakazka, Firma
+from ..models import Zakazka, Firma, Kontakt
 from ..auth import login_required
 from ..services import clockify, firmy as firmy_service
 
@@ -177,3 +177,65 @@ def firma_nacist(id):
     flash(f"Načteno z {zdroj}." if ok else "Nepodařilo se načíst data (zkontroluj IČO / MERK klíč).",
           "info" if ok else "error")
     return redirect(url_for("main.firma_detail", id=id))
+
+
+@bp.route("/firmy/<int:id>/upravit", methods=["GET", "POST"])
+@login_required
+def firma_upravit(id):
+    firma = Firma.query.get_or_404(id)
+    if request.method == "POST":
+        firma.nazev = request.form.get("nazev", firma.nazev).strip() or firma.nazev
+        firma.ico = request.form.get("ico", "").strip()
+        firma.dic = request.form.get("dic", "").strip()
+        firma.adresa = request.form.get("adresa", "").strip()
+        firma.web = request.form.get("web", "").strip()
+        firma.obor = request.form.get("obor", "").strip()
+        firma.zamestnanci = request.form.get("zamestnanci", "").strip()
+        firma.obrat = request.form.get("obrat", "").strip()
+        firma.rucne_upraveno = True  # zámek proti přepisu z MERK
+        db.session.commit()
+        flash("Firma uložena (ručně upraveno — MERK ji už nepřepíše).", "info")
+        return redirect(url_for("main.firma_detail", id=id))
+    return render_template("firma_upravit.html", firma=firma)
+
+
+@bp.route("/firmy/<int:id>/kontakt/novy", methods=["POST"])
+@login_required
+def kontakt_novy(id):
+    Firma.query.get_or_404(id)
+    db.session.add(Kontakt(
+        firma_id=id, jmeno=request.form.get("jmeno", "").strip(),
+        pozice=request.form.get("pozice", "").strip(),
+        email=request.form.get("email", "").strip(),
+        telefon=request.form.get("telefon", "").strip(),
+        zdroj="rucne", rucne_upraveno=True))
+    db.session.commit()
+    flash("Kontakt přidán.", "info")
+    return redirect(url_for("main.firma_detail", id=id))
+
+
+@bp.route("/kontakt/<int:id>/upravit", methods=["GET", "POST"])
+@login_required
+def kontakt_upravit(id):
+    k = Kontakt.query.get_or_404(id)
+    if request.method == "POST":
+        k.jmeno = request.form.get("jmeno", "").strip()
+        k.pozice = request.form.get("pozice", "").strip()
+        k.email = request.form.get("email", "").strip()
+        k.telefon = request.form.get("telefon", "").strip()
+        k.rucne_upraveno = True
+        db.session.commit()
+        flash("Kontakt uložen.", "info")
+        return redirect(url_for("main.firma_detail", id=k.firma_id))
+    return render_template("kontakt_upravit.html", k=k)
+
+
+@bp.route("/kontakt/<int:id>/smazat", methods=["POST"])
+@login_required
+def kontakt_smazat(id):
+    k = Kontakt.query.get_or_404(id)
+    fid = k.firma_id
+    db.session.delete(k)
+    db.session.commit()
+    flash("Kontakt smazán.", "info")
+    return redirect(url_for("main.firma_detail", id=fid))

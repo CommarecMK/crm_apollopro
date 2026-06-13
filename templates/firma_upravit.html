@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.firma_detail', id=firma.id) }}">← Zpět na firmu</a></p>
+<h1 style="color:var(--navy);font-size:26px;margin-bottom:16px">Upravit firmu</h1>
+
+<form method="post" style="max-width:640px;background:#fff;padding:24px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% set fields = [('nazev','Název'),('ico','IČO'),('dic','DIČ'),('adresa','Adresa'),
+                   ('web','Web'),('obor','Obor'),('zamestnanci','Zaměstnanci'),('obrat','Obrat')] %}
+  {% for key, label in fields %}
+  <label style="display:block;margin-bottom:12px">
+    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">{{ label }}</span>
+    <input type="text" name="{{ key }}" value="{{ firma[key] or '' }}"
+           style="width:100%;padding:9px 12px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+  </label>
+  {% endfor %}
+  <div style="margin-top:16px;display:flex;gap:10px">
+    <button class="btn" type="submit">Uložit</button>
+    <a class="btn btn-ghost" href="{{ url_for('main.firma_detail', id=firma.id) }}">Zrušit</a>
+  </div>
+  <p class="muted" style="font-size:12px;margin-top:12px">Po uložení se firma označí jako ručně upravená ✎ a MERK ji při aktualizaci nepřepíše.</p>
+</form>
+{% endblock %}

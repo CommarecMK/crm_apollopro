@@ -3,7 +3,9 @@
 
 <p style="margin-bottom:6px"><a href="{{ url_for('main.firmy') }}">← Firmy</a></p>
 <h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
-  {{ firma.nazev }}{% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
+  {{ firma.nazev }}
+  {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
+  {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
 </h1>
 <p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}</p>
 
@@ -26,17 +28,39 @@
     <!-- Kontakty -->
     <h2 style="color:var(--navy);font-size:18px;margin:8px 0 10px">Kontakty</h2>
     <table>
-      <thead><tr><th>Jméno</th><th>Pozice</th><th>E-mail</th><th>Telefon</th><th>Zdroj</th></tr></thead>
+      <thead><tr><th>Jméno</th><th>Pozice</th><th>E-mail</th><th>Telefon</th><th>Zdroj</th><th></th></tr></thead>
       <tbody>
         {% for k in firma.kontakty %}
-        <tr><td><b>{{ k.jmeno }}</b></td><td>{{ k.pozice or '—' }}</td>
+        <tr>
+          <td><b>{{ k.jmeno }}</b>{% if k.rucne_upraveno %} <span title="Ručně upraveno" style="color:var(--cyan-dark)">✎</span>{% endif %}</td>
+          <td>{{ k.pozice or '—' }}</td>
           <td>{{ k.email or '—' }}</td><td>{{ k.telefon or '—' }}</td>
-          <td><span class="tag">{{ k.zdroj }}</span></td></tr>
+          <td><span class="tag">{{ k.zdroj }}</span></td>
+          <td style="white-space:nowrap;text-align:right">
+            <a href="{{ url_for('main.kontakt_upravit', id=k.id) }}">Upravit</a>
+            <form method="post" action="{{ url_for('main.kontakt_smazat', id=k.id) }}" style="display:inline"
+                  onsubmit="return confirm('Smazat kontakt {{ k.jmeno }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
+            </form>
+          </td>
+        </tr>
         {% else %}
-        <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Zatím žádné kontakty. Načti je z MERK.</td></tr>
+        <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Zatím žádné kontakty. Načti je z MERK nebo přidej ručně.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+
+    <!-- Přidat kontakt -->
+    <form method="post" action="{{ url_for('main.kontakt_novy', id=firma.id) }}"
+          style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="jmeno" placeholder="Jméno" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <input type="text" name="pozice" placeholder="Pozice" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <input type="text" name="email" placeholder="E-mail" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <input type="text" name="telefon" placeholder="Telefon" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <button class="btn" type="submit">+ Přidat kontakt</button>
+    </form>
 
     <!-- Zakázky firmy -->
     <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
@@ -64,6 +88,10 @@
       <button class="btn" type="submit" {{ 'disabled' if not firma.ico }}>Načíst z MERK / ARES</button>
     </form>
     {% if not firma.ico %}<p class="muted" style="font-size:12px;margin-top:8px">Chybí IČO.</p>{% endif %}
+    {% if firma.rucne_upraveno %}<p class="muted" style="font-size:12px;margin-top:8px">✎ Ručně upraveno — MERK pole firmy nepřepíše.</p>{% endif %}
+
+    <hr style="border:none;border-top:1px solid var(--n8);margin:16px 0">
+    <a class="btn btn-ghost" href="{{ url_for('main.firma_upravit', id=firma.id) }}" style="width:100%;text-align:center;display:block">Upravit ručně ✎</a>
   </div>
 </div>
 {% endblock %}

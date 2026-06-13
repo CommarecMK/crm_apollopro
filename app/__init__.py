@@ -48,17 +48,25 @@ def _inline_migrace():
     from sqlalchemy import inspect, text
     try:
         insp = inspect(db.engine)
-        if "firma" not in insp.get_table_names():
-            return
-        existujici = {c["name"] for c in insp.get_columns("firma")}
-        nove = {
-            "ico": "VARCHAR(20)", "dic": "VARCHAR(20)", "adresa": "VARCHAR(300)",
-            "web": "VARCHAR(200)", "obor": "VARCHAR(200)", "zamestnanci": "VARCHAR(80)",
-            "obrat": "VARCHAR(80)", "merk_nacteno": "VARCHAR(40)",
+        tabulky = insp.get_table_names()
+        plan = {
+            "firma": {
+                "ico": "VARCHAR(20)", "dic": "VARCHAR(20)", "adresa": "VARCHAR(300)",
+                "web": "VARCHAR(200)", "obor": "VARCHAR(200)", "zamestnanci": "VARCHAR(80)",
+                "obrat": "VARCHAR(80)", "merk_nacteno": "VARCHAR(40)",
+                "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
+            },
+            "kontakt": {
+                "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
+            },
         }
-        for col, typ in nove.items():
-            if col not in existujici:
-                db.session.execute(text(f"ALTER TABLE firma ADD COLUMN {col} {typ}"))
+        for tab, sloupce in plan.items():
+            if tab not in tabulky:
+                continue
+            existujici = {c["name"] for c in insp.get_columns(tab)}
+            for col, typ in sloupce.items():
+                if col not in existujici:
+                    db.session.execute(text(f"ALTER TABLE {tab} ADD COLUMN {col} {typ}"))
         db.session.commit()
     except Exception as e:
         db.session.rollback()

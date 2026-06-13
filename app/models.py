@@ -21,6 +21,7 @@ class Firma(db.Model):
     zamestnanci  = db.Column(db.String(80))    # rozsah z MERK
     obrat        = db.Column(db.String(80))     # rozsah z MERK
     merk_nacteno = db.Column(db.String(40))    # datum posledního natažení
+    rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
 
     zakazky  = db.relationship("Zakazka", back_populates="firma", lazy=True)
     kontakty = db.relationship("Kontakt", back_populates="firma", lazy=True,
@@ -40,6 +41,7 @@ class Kontakt(db.Model):
     telefon   = db.Column(db.String(60))
     pozice    = db.Column(db.String(120))
     zdroj     = db.Column(db.String(20), default="rucne")  # merk / rucne
+    rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
     firma_id  = db.Column(db.Integer, db.ForeignKey("firma.id"), nullable=False)
     firma     = db.relationship("Firma", back_populates="kontakty", lazy="joined")
 

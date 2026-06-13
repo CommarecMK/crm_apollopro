@@ -139,14 +139,17 @@ def obohat_firmu(firma):
     data = nacti_firmu(firma.ico, firma.nazev)
     if not data:
         return (False, None)
-    firma.dic = data.get("dic") or firma.dic
-    firma.adresa = data.get("adresa") or firma.adresa
-    firma.web = data.get("web") or firma.web
-    firma.obor = data.get("obor") or firma.obor
-    firma.zamestnanci = data.get("zamestnanci") or firma.zamestnanci
-    firma.obrat = data.get("obrat") or firma.obrat
+    # Pole firmy přepíšeme jen pokud NEbyla ručně upravená (zámek)
+    if not firma.rucne_upraveno:
+        firma.dic = data.get("dic") or firma.dic
+        firma.adresa = data.get("adresa") or firma.adresa
+        firma.web = data.get("web") or firma.web
+        firma.obor = data.get("obor") or firma.obor
+        firma.zamestnanci = data.get("zamestnanci") or firma.zamestnanci
+        firma.obrat = data.get("obrat") or firma.obrat
     firma.merk_nacteno = f"{date.today().isoformat()} ({data['zdroj']})"
-    # Kontakty z MERK – přidáme jen ty, které ještě nemáme (dle jména)
+    # Kontakty z MERK – přidáme jen ty, které ještě nemáme (dle jména).
+    # Ručně upravené ani ručně přidané kontakty se nikdy nepřepisují.
     existujici = {(k.jmeno or "").lower() for k in firma.kontakty}
     for k in data.get("kontakty", []):
         if (k["jmeno"] or "").lower() not in existujici:
