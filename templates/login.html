@@ -6,9 +6,9 @@
   <p class="muted" style="font-size:13px;margin-bottom:20px">Kokpit zakázek Commarec</p>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="password" name="heslo" placeholder="Heslo" autofocus
-           style="width:100%;padding:11px 13px;border:1px solid var(--n7);border-radius:8px;
-                  font-family:inherit;font-size:15px;margin-bottom:14px">
+    {% set istyl = "width:100%;padding:11px 13px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:15px;margin-bottom:12px" %}
+    <input type="email" name="email" placeholder="E-mail" autofocus style="{{ istyl }}">
+    <input type="password" name="heslo" placeholder="Heslo" style="{{ istyl }}">
     <button class="btn" style="width:100%" type="submit">Vstoupit</button>
   </form>
 </div>

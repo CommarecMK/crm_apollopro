@@ -94,11 +94,13 @@
       <span class="mark"></span>
       <b>Commarec</b><span class="sub">Kokpit zakázek</span>
     </div>
-    {% if session.get('prihlasen') or session.get('user_id') %}
+    {% if session.get('user_id') %}
     <div style="display:flex;align-items:center;gap:20px">
       <a class="logout" href="{{ url_for('main.prehled') }}">Přehled</a>
       <a class="logout" href="{{ url_for('main.dashboard') }}">Stav zakázek</a>
       <a class="logout" href="{{ url_for('main.firmy') }}">Firmy</a>
+      {% if je_admin() %}<a class="logout" href="{{ url_for('main.admin_uzivatele') }}">Uživatelé</a>{% endif %}
+      <span class="sub">{{ session.get('user_name') }}</span>
       <a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>
     </div>
     {% endif %}

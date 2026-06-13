@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:18px">Uživatelé</h1>
+
+{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+  {% for u in uzivatele %}
+  <div class="stat">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b>{{ u.email or '—' }}</b>
+      {% if u.sso_id %}<span class="tag">portál</span>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('main.admin_uzivatel_upravit', id=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="jmeno" value="{{ u.jmeno or '' }}" placeholder="Jméno" style="{{ istyl }};width:100%;margin-bottom:8px">
+      <select name="role" style="{{ istyl }};width:100%;margin-bottom:8px">
+        {% for r in ['admin','editor','majitel','interim'] %}
+        <option value="{{ r }}" {{ 'selected' if r==u.role }}>{{ r }}</option>{% endfor %}
+      </select>
+      <input type="password" name="heslo" placeholder="nové heslo (nepovinné)" style="{{ istyl }};width:100%;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
+        <input type="checkbox" name="aktivni" {{ 'checked' if u.aktivni }}> Aktivní
+      </label>
+      <div style="display:flex;gap:8px">
+        <button class="btn" type="submit">Uložit</button>
+      </div>
+    </form>
+    <form method="post" action="{{ url_for('main.admin_uzivatel_smazat', id=u.id) }}" style="margin-top:8px" onsubmit="return confirm('Smazat uživatele?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Přidat uživatele</h2>
+<form method="post" action="{{ url_for('main.admin_uzivatel_novy') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fff;padding:16px;border-radius:12px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="text" name="jmeno" placeholder="Jméno" style="{{ istyl }}">
+  <input type="email" name="email" placeholder="E-mail" required style="{{ istyl }}">
+  <input type="password" name="heslo" placeholder="Heslo" style="{{ istyl }}">
+  <select name="role" style="{{ istyl }}">
+    {% for r in ['majitel','editor','interim','admin'] %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">+ Přidat</button>
+</form>
+
+<div class="note" style="margin-top:16px">
+  <b>Role:</b>
+  {% for r, popis in role_popis.items() %}<div style="font-size:13px">{{ popis }}</div>{% endfor %}
+</div>
+{% endblock %}

@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 
-from ..extensions import db, ADMIN_PASSWORD
-from ..models import Zakazka, Firma, Kontakt
-from ..auth import login_required
+from werkzeug.security import check_password_hash, generate_password_hash
+from ..extensions import db
+from ..models import Zakazka, Firma, Kontakt, User
+from ..auth import login_required, klient_required, zakazky_required, admin_required
 from ..services import clockify, firmy as firmy_service, snapshot
 
 bp = Blueprint("main", __name__)
@@ -47,29 +48,41 @@ def _seznam_mesicu(pocet=14):
     return out
 
 
+def _prihlas(u):
+    session["user_id"] = u.id
+    session["user_name"] = u.jmeno or u.email
+    session["user_role"] = u.role
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if request.form.get("heslo") == ADMIN_PASSWORD:
-            session["prihlasen"] = True
+        email = request.form.get("email", "").strip().lower()
+        heslo = request.form.get("heslo", "")
+        u = User.query.filter_by(email=email).first()
+        if u and u.aktivni and u.password_hash and check_password_hash(u.password_hash, heslo):
+            _prihlas(u)
             return redirect(url_for("main.prehled"))
-        flash("Nesprávné heslo.", "error")
+        flash("Nesprávný e-mail nebo heslo.", "error")
     return render_template("login.html")
 
 
 @bp.route("/auth")
 def sso_vstup():
-    """Přijme podepsaný SSO token z Apollo Pro portálu (stejné jako CRM/Brain).
-    Token nese id/name/role a je podepsaný sdíleným SSO_SECRET — nepotřebuje
-    sahat do databáze CRM."""
+    """SSO z Apollo Pro portálu. Najde/vytvoří uživatele kokpitu (nový = role 'majitel')."""
     from ..sso import over_token
     udaje = over_token(request.args.get("token", ""))
     portal = os.environ.get("PORTAL_URL", "https://apollopro.io")
     if not udaje:
         return redirect(portal + "/login")
-    session["user_id"]   = udaje.get("id")
-    session["user_name"] = udaje.get("name")
-    session["user_role"] = udaje.get("role")
+    u = User.query.filter_by(sso_id=udaje.get("id")).first()
+    if not u:
+        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"), role="majitel", aktivni=True)
+        db.session.add(u)
+        db.session.commit()
+    if not u.aktivni:
+        return redirect(portal + "/login")
+    _prihlas(u)
     return redirect(url_for("main.prehled"))
 
 
@@ -99,7 +112,7 @@ def diagnostika_merk():
 
 
 @bp.route("/obnovit", methods=["POST"])
-@login_required
+@zakazky_required
 def obnovit():
     """Ruční obnova dat z Clockify (snapshot)."""
     ok, info = snapshot.obnov()
@@ -313,7 +326,7 @@ def firma_detail(id):
 
 
 @bp.route("/firmy/<int:id>/nacist", methods=["POST"])
-@login_required
+@klient_required
 def firma_nacist(id):
     firma = Firma.query.get_or_404(id)
     ok, zdroj = firmy_service.obohat_firmu(firma)
@@ -323,7 +336,7 @@ def firma_nacist(id):
 
 
 @bp.route("/firmy/<int:id>/toggle", methods=["POST"])
-@login_required
+@zakazky_required
 def firma_toggle(id):
     f = Firma.query.get_or_404(id)
     f.aktivni = not f.aktivni
@@ -332,7 +345,7 @@ def firma_toggle(id):
 
 
 @bp.route("/zakazka/<int:id>/toggle", methods=["POST"])
-@login_required
+@zakazky_required
 def zakazka_toggle(id):
     z = Zakazka.query.get_or_404(id)
     z.aktivni = not z.aktivni
@@ -341,7 +354,7 @@ def zakazka_toggle(id):
 
 
 @bp.route("/firmy/<int:id>/upravit", methods=["GET", "POST"])
-@login_required
+@klient_required
 def firma_upravit(id):
     firma = Firma.query.get_or_404(id)
     if request.method == "POST":
@@ -361,7 +374,7 @@ def firma_upravit(id):
 
 
 @bp.route("/firmy/<int:id>/kontakt/novy", methods=["POST"])
-@login_required
+@klient_required
 def kontakt_novy(id):
     Firma.query.get_or_404(id)
     db.session.add(Kontakt(
@@ -376,7 +389,7 @@ def kontakt_novy(id):
 
 
 @bp.route("/kontakt/<int:id>/upravit", methods=["GET", "POST"])
-@login_required
+@klient_required
 def kontakt_upravit(id):
     k = Kontakt.query.get_or_404(id)
     if request.method == "POST":
@@ -427,7 +440,7 @@ def zakazka_detail(id):
 
 
 @bp.route("/zakazka/<int:id>/pm", methods=["POST"])
-@login_required
+@zakazky_required
 def zakazka_pm(id):
     z = Zakazka.query.get_or_404(id)
     z.projektovy_manazer = request.form.get("jmeno", "").strip() or None
@@ -437,7 +450,7 @@ def zakazka_pm(id):
 
 
 @bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])
-@login_required
+@zakazky_required
 def zakazka_upravit(id):
     z = Zakazka.query.get_or_404(id)
     if request.method == "POST":
@@ -475,7 +488,7 @@ def zakazka_upravit(id):
 
 
 @bp.route("/kontakt/<int:id>/smazat", methods=["POST"])
-@login_required
+@klient_required
 def kontakt_smazat(id):
     k = Kontakt.query.get_or_404(id)
     fid = k.firma_id
@@ -483,3 +496,63 @@ def kontakt_smazat(id):
     db.session.commit()
     flash("Kontakt smazán.", "info")
     return redirect(url_for("main.firma_detail", id=fid))
+
+
+# ─── Správa uživatelů (jen admin) ──────────────────────────────────
+ROLE_POPIS = {"admin": "Admin (vše + uživatelé)", "editor": "Editor (zakázky, rozpočty, Obnovit)",
+              "majitel": "Majitel (čtení + MERK/kontakty)", "interim": "Interim (čtení bez financí)"}
+
+
+@bp.route("/admin/uzivatele")
+@admin_required
+def admin_uzivatele():
+    uzivatele = User.query.order_by(User.role, User.jmeno).all()
+    return render_template("admin_uzivatele.html", uzivatele=uzivatele, role_popis=ROLE_POPIS)
+
+
+@bp.route("/admin/uzivatele/novy", methods=["POST"])
+@admin_required
+def admin_uzivatel_novy():
+    email = request.form.get("email", "").strip().lower()
+    if not email:
+        flash("Vyplň e-mail.", "error")
+        return redirect(url_for("main.admin_uzivatele"))
+    if User.query.filter_by(email=email).first():
+        flash("Uživatel s tímto e-mailem už existuje.", "error")
+        return redirect(url_for("main.admin_uzivatele"))
+    heslo = request.form.get("heslo", "").strip()
+    db.session.add(User(
+        email=email, jmeno=request.form.get("jmeno", "").strip(),
+        role=request.form.get("role", "majitel"), aktivni=True,
+        password_hash=generate_password_hash(heslo) if heslo else None))
+    db.session.commit()
+    flash("Uživatel přidán.", "info")
+    return redirect(url_for("main.admin_uzivatele"))
+
+
+@bp.route("/admin/uzivatele/<int:id>/upravit", methods=["POST"])
+@admin_required
+def admin_uzivatel_upravit(id):
+    u = User.query.get_or_404(id)
+    u.jmeno = request.form.get("jmeno", u.jmeno).strip()
+    u.role = request.form.get("role", u.role)
+    u.aktivni = bool(request.form.get("aktivni"))
+    nove_heslo = request.form.get("heslo", "").strip()
+    if nove_heslo:
+        u.password_hash = generate_password_hash(nove_heslo)
+    db.session.commit()
+    flash("Uživatel uložen.", "info")
+    return redirect(url_for("main.admin_uzivatele"))
+
+
+@bp.route("/admin/uzivatele/<int:id>/smazat", methods=["POST"])
+@admin_required
+def admin_uzivatel_smazat(id):
+    u = User.query.get_or_404(id)
+    if u.id == session.get("user_id"):
+        flash("Nemůžeš smazat sám sebe.", "error")
+    else:
+        db.session.delete(u)
+        db.session.commit()
+        flash("Uživatel smazán.", "info")
+    return redirect(url_for("main.admin_uzivatele"))

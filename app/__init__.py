@@ -32,14 +32,38 @@ def create_app():
     from .routes.main import bp as main_bp
     app.register_blueprint(main_bp)
 
+    # Oprávnění dostupná v šablonách
+    from .auth import smi_zakazky, smi_klient, vidi_finance, je_admin
+    app.context_processor(lambda: {"smi_zakazky": smi_zakazky, "smi_klient": smi_klient,
+                                   "vidi_finance": vidi_finance, "je_admin": je_admin})
+
     with app.app_context():
-        db.create_all()           # vytvoří chybějící tabulky (i novou 'kontakt')
+        db.create_all()           # vytvoří chybějící tabulky
         _inline_migrace()         # doplní nové sloupce do existujících tabulek
         from .seed import seed_pokud_prazdno, backfill_ico
         seed_pokud_prazdno()
         backfill_ico()            # doplní IČO firmám z jejich zakázek
+        _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
 
     return app
+
+
+def _bootstrap_admin():
+    """Zajistí, že hlavní admin (ADMIN_EMAIL) existuje a má roli admin — nelze se zamknout."""
+    from werkzeug.security import generate_password_hash
+    from .extensions import ADMIN_EMAIL, ADMIN_PASSWORD
+    from .models import User
+    if not ADMIN_EMAIL:
+        return
+    u = User.query.filter_by(email=ADMIN_EMAIL).first()
+    if not u:
+        u = User(email=ADMIN_EMAIL, jmeno="Admin", role="admin", aktivni=True,
+                 password_hash=generate_password_hash(ADMIN_PASSWORD))
+        db.session.add(u)
+    else:
+        u.role = "admin"
+        u.aktivni = True
+    db.session.commit()
 
 
 def _inline_migrace():

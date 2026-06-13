@@ -47,6 +47,26 @@ class Kontakt(db.Model):
     firma     = db.relationship("Firma", back_populates="kontakty", lazy="joined")
 
 
+class User(db.Model):
+    """Uživatel kokpitu. Role: admin / editor / majitel."""
+    __tablename__ = "uzivatel"
+    id            = db.Column(db.Integer, primary_key=True)
+    sso_id        = db.Column(db.Integer, unique=True, nullable=True)  # id z portálu (SSO)
+    jmeno         = db.Column(db.String(120))
+    email         = db.Column(db.String(160), unique=True, nullable=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    role          = db.Column(db.String(20), default="majitel")  # admin | editor | majitel
+    aktivni       = db.Column(db.Boolean, default=True)
+
+    @property
+    def smi_zakazky(self):
+        return self.role in ("admin", "editor")
+
+    @property
+    def je_admin(self):
+        return self.role == "admin"
+
+
 class Snapshot(db.Model):
     """Denní snímek dat z Clockify (JSON). Stránky čtou odtud → rychlé načítání."""
     __tablename__ = "snapshot"
