@@ -267,14 +267,32 @@ def firma_detail(id):
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
     serie = prehled["serie"]
+
+    def _akt_v_mesici(z, m):
+        if z.datum_od and (now.year, m) < (z.datum_od.year, z.datum_od.month):
+            return False
+        if z.datum_do and (now.year, m) > (z.datum_do.year, z.datum_do.month):
+            return False
+        return True
+    # Rozpočet hodin dle smlouvy = měsíční kontrahované hodiny (typ "mesicni") aktivní v daném měsíci
+    rozpocet_mesic = []
+    for m, _, _ in serie:
+        rozpocet_mesic.append(round(sum((z.rozpocet_hodin_mesic or 0) for z in firma.zakazky
+                                        if z.typ_rozpoctu == "mesicni" and _akt_v_mesici(z, m))))
     graf = {"labels": [MESICE_CZ[m][:3] for m, _, _ in serie],
             "celkem": [t for _, t, _ in serie],
-            "bill": [b for _, _, b in serie]}
+            "bill": [b for _, _, b in serie],
+            "rozpocet": rozpocet_mesic}
     kpi = {"pocet": len(firma.zakazky),
            "hodin_bill": round(sum(z.hodiny_bill for z in firma.zakazky), 1),
+           "rozpocet_h": round(sum(rozpocet_mesic)),
            "trzby": round(sum(z.trzba_skutecnost for z in firma.zakazky)),
            "potencial": round(sum(z.nenaplneny_potencial for z in firma.zakazky))}
-    return render_template("firma_detail.html", firma=firma, graf=graf, kpi=kpi, rok=now.year)
+    od_rok = f"{now.year}-01-01T00:00:00Z"
+    do_ted = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    uzivatele = clockify.hodiny_uzivatele_firma(zkratky, od_rok, do_ted)
+    return render_template("firma_detail.html", firma=firma, graf=graf, kpi=kpi,
+                           rok=now.year, uzivatele=uzivatele)
 
 
 @bp.route("/firmy/<int:id>/nacist", methods=["POST"])
@@ -369,10 +387,19 @@ def zakazka_detail(id):
     z.hodiny = round(sum(s[1] for s in serie), 1)
     z.hodiny_bill = round(sum(s[2] for s in serie), 1)
     z.hodiny_nonbill = round(z.hodiny - z.hodiny_bill, 1)
+    def _rozp_mesic(m):
+        if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_mesic:
+            return 0
+        if z.datum_od and (now.year, m) < (z.datum_od.year, z.datum_od.month):
+            return 0
+        if z.datum_do and (now.year, m) > (z.datum_do.year, z.datum_do.month):
+            return 0
+        return round(z.rozpocet_hodin_mesic)
     graf = {
         "labels": [MESICE_CZ[m][:3] for m, _, _ in serie],
         "celkem": [tot for _, tot, _ in serie],
         "bill": [bil for _, _, bil in serie],
+        "rozpocet": [_rozp_mesic(m) for m, _, _ in serie],
         "trzba": [round((bil) * (z.hodinova_sazba or 0)) for _, _, bil in serie],
     }
     return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year, uzivatele=uzivatele)

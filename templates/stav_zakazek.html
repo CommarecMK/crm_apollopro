@@ -25,17 +25,23 @@
 
 <form class="filters" method="get">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo zkratku…">
-  <label style="display:flex;flex-direction:column;font-size:11px;color:#667">Měsíce (Ctrl/⌘ = více)
-    <select name="mesic" multiple size="5" style="min-width:150px">
-      <option value="vse" {{ 'selected' if 'vse' in f_mesice }}>Celý rok</option>
-      {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val in f_mesice }}>{{ popis }}</option>{% endfor %}
-    </select>
-  </label>
-  <label style="display:flex;flex-direction:column;font-size:11px;color:#667">Typ služby (více)
-    <select name="typ" multiple size="5" style="min-width:150px">
-      {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t in f_typy }}>{{ t }}</option>{% endfor %}
-    </select>
-  </label>
+  <div class="dd" id="dd-mesice">
+    <button type="button" class="dd-btn" onclick="toggleDD('dd-mesice')">Měsíce{% if f_mesice %} ({{ f_mesice|length }}){% endif %}</button>
+    <div class="dd-panel">
+      <label><input type="checkbox" name="mesic" value="vse" {{ 'checked' if 'vse' in f_mesice }}> Celý rok</label>
+      {% for val, popis in mesice %}
+      <label><input type="checkbox" name="mesic" value="{{ val }}" {{ 'checked' if val in f_mesice }}> {{ popis }}</label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="dd" id="dd-typy">
+    <button type="button" class="dd-btn" onclick="toggleDD('dd-typy')">Typ služby{% if f_typy %} ({{ f_typy|length }}){% endif %}</button>
+    <div class="dd-panel">
+      {% for t in typy %}
+      <label><input type="checkbox" name="typ" value="{{ t }}" {{ 'checked' if t in f_typy }}> {{ t }}</label>
+      {% endfor %}
+    </div>
+  </div>
   <select name="aktivita">
     {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
       <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>
@@ -82,4 +88,14 @@
 <p class="muted" style="font-size:12px;margin-top:14px">
   Návrh ke kontrole. Hodiny z Clockify za období: {{ obdobi_popis }}. Rozpočty hodin doplníme z nabídek.
 </p>
+
+<script>
+function toggleDD(id){
+  document.querySelectorAll('.dd.open').forEach(function(d){ if(d.id!==id) d.classList.remove('open'); });
+  document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', function(e){
+  document.querySelectorAll('.dd.open').forEach(function(d){ if(!d.contains(e.target)) d.classList.remove('open'); });
+});
+</script>
 {% endblock %}

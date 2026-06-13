@@ -5,12 +5,29 @@ Párování zakázek: spolehlivý klíč je ZKRATKA (IČO_pořadí, např. 47678
 kterou má uživatel uloženou v poli "Note" u Clockify klienta.
 Hodiny se berou ze summary reportu seskupeného podle CLIENT (případně PROJECT).
 """
+import time
 import requests
 from ..extensions import CLOCKIFY_API_KEY, CLOCKIFY_WORKSPACE_ID
 
 API = "https://api.clockify.me/api/v1"
 REPORTS = "https://reports.api.clockify.me/v1"
 TIMEOUT = 25
+
+# ── Krátkodobá cache (zrychluje načítání stránek) ────────────────
+_CACHE = {}
+CACHE_TTL = 300  # sekund (5 min)
+
+
+def _cache_get(key):
+    v = _CACHE.get(key)
+    if v and (time.time() - v[0]) < CACHE_TTL:
+        return v[1]
+    return None
+
+
+def _cache_set(key, val):
+    _CACHE[key] = (time.time(), val)
+    return val
 
 
 def je_nakonfigurovano():
@@ -24,9 +41,12 @@ def _headers():
 def _workspace_id():
     if CLOCKIFY_WORKSPACE_ID:
         return CLOCKIFY_WORKSPACE_ID
+    c = _cache_get("ws")
+    if c:
+        return c
     r = requests.get(f"{API}/user", headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
-    return r.json().get("activeWorkspace")
+    return _cache_set("ws", r.json().get("activeWorkspace"))
 
 
 def _norm(s):
@@ -35,6 +55,10 @@ def _norm(s):
 
 def _seznam(ws, co):
     """Načte všechny klienty/projekty (vč. pole note). co = 'clients' | 'projects'."""
+    ck = f"seznam:{ws}:{co}"
+    c = _cache_get(ck)
+    if c is not None:
+        return c
     out, page = [], 1
     while True:
         r = requests.get(f"{API}/workspaces/{ws}/{co}",
@@ -48,12 +72,16 @@ def _seznam(ws, co):
         if len(davka) < 200:
             break
         page += 1
-    return out
+    return _cache_set(ck, out)
 
 
 def _hodiny_summary(ws, group, datum_od, datum_do, billable=None):
     """Vrátí list (id, name, hodiny) ze summary reportu pro dané seskupení.
     billable=True → jen fakturovatelné, False → jen nefakturovatelné, None → vše."""
+    ck = f"sum:{ws}:{group}:{datum_od}:{datum_do}:{billable}"
+    c = _cache_get(ck)
+    if c is not None:
+        return c
     body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
             "summaryFilter": {"groups": [group]}}
     if billable is not None:
@@ -64,7 +92,7 @@ def _hodiny_summary(ws, group, datum_od, datum_do, billable=None):
     out = []
     for g in r.json().get("groupOne", []):
         out.append((g.get("_id"), g.get("name", ""), round((g.get("duration") or 0) / 3600.0, 1)))
-    return out
+    return _cache_set(ck, out)
 
 
 def hodiny_dle_zkratky(datum_od, datum_do):
@@ -205,34 +233,53 @@ def firma_prehled(zkratky, rok, do_mesic):
         return prazdny
 
 
+def _hodiny_uzivatele_ids(ws, ids, datum_od, datum_do):
+    """Hodiny po zaměstnancích pro dané client-id. [(jmeno, celkem, bill)]."""
+    if not ids:
+        return []
+
+    def _po_uzivatelich(billable=None):
+        body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
+                "summaryFilter": {"groups": ["USER"]},
+                "clients": {"ids": ids, "contains": "CONTAINS", "status": "ALL"}}
+        if billable is not None:
+            body["billable"] = billable
+        r = requests.post(f"{REPORTS}/workspaces/{ws}/reports/summary",
+                          headers=_headers(), json=body, timeout=TIMEOUT)
+        r.raise_for_status()
+        return {g.get("_id"): (g.get("name", ""), round((g.get("duration") or 0) / 3600.0, 1))
+                for g in r.json().get("groupOne", [])}
+
+    tot, bil = _po_uzivatelich(), _po_uzivatelich(True)
+    out = [(nm, h, bil.get(uid, ("", 0))[1]) for uid, (nm, h) in tot.items()]
+    return sorted(out, key=lambda x: -x[1])
+
+
 def hodiny_dle_uzivatelu(zkratka, datum_od, datum_do):
-    """Rozpad hodin po zaměstnancích pro danou zakázku (klienta). [(jmeno, celkem, bill)]."""
+    """Hodiny po zaměstnancích pro JEDNU zakázku (dle zkratky v Note)."""
     if not je_nakonfigurovano() or not zkratka:
         return []
     try:
         ws = _workspace_id()
         ids = [k.get("id") for k in _seznam(ws, "clients")
                if (k.get("note") or "").strip() == zkratka]
-        if not ids:
-            return []
-
-        def _po_uzivatelich(billable=None):
-            body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
-                    "summaryFilter": {"groups": ["USER"]},
-                    "clients": {"ids": ids, "contains": "CONTAINS", "status": "ALL"}}
-            if billable is not None:
-                body["billable"] = billable
-            r = requests.post(f"{REPORTS}/workspaces/{ws}/reports/summary",
-                              headers=_headers(), json=body, timeout=TIMEOUT)
-            r.raise_for_status()
-            return {g.get("_id"): (g.get("name", ""), round((g.get("duration") or 0) / 3600.0, 1))
-                    for g in r.json().get("groupOne", [])}
-
-        tot, bil = _po_uzivatelich(), _po_uzivatelich(True)
-        out = [(nm, h, bil.get(uid, ("", 0))[1]) for uid, (nm, h) in tot.items()]
-        return sorted(out, key=lambda x: -x[1])
+        return _hodiny_uzivatele_ids(ws, ids, datum_od, datum_do)
     except Exception as e:
         print(f"[clockify] uzivatele: {e}")
+        return []
+
+
+def hodiny_uzivatele_firma(zkratky, datum_od, datum_do):
+    """Hodiny po zaměstnancích za CELÉHO klienta (více zakázek/zkratek)."""
+    if not je_nakonfigurovano() or not zkratky:
+        return []
+    try:
+        ws = _workspace_id()
+        ids = [k.get("id") for k in _seznam(ws, "clients")
+               if (k.get("note") or "").strip() in set(zkratky)]
+        return _hodiny_uzivatele_ids(ws, ids, datum_od, datum_do)
+    except Exception as e:
+        print(f"[clockify] uzivatele firma: {e}")
         return []
 
 

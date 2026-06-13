@@ -53,6 +53,8 @@ new Chart(document.getElementById('graf'), {
     datasets: [
       {type:'bar', label:'Fakturovatelné h', data:G.bill, backgroundColor:'#34C759', yAxisID:'y'},
       {type:'bar', label:'Celkem h', data:G.celkem, backgroundColor:'#BAC3D2', yAxisID:'y'},
+      {type:'line', label:'Rozpočet h (smlouva)', data:G.rozpocet, borderColor:'#173767',
+       backgroundColor:'#173767', borderDash:[6,4], tension:0, pointRadius:3, yAxisID:'y'},
       {type:'line', label:'Tržba (Kč)', data:G.trzba, borderColor:'#00AFF0', backgroundColor:'#00AFF0',
        tension:.3, yAxisID:'y1'}
     ]
