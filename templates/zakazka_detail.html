@@ -31,14 +31,25 @@
 <div class="stat" style="margin-top:20px">
   <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Hodiny podle zaměstnanců — {{ rok }}</h3>
   <table style="box-shadow:none">
-    <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Celkem h</th></tr></thead>
+    <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Celkem h</th><th style="text-align:center">PM</th></tr></thead>
     <tbody>
       {% for jmeno, celkem, bill in uzivatele %}
-      <tr><td>{{ jmeno }}</td>
+      <tr>
+        <td>{{ jmeno }}{% if z.projektovy_manazer and jmeno == z.projektovy_manazer %} <span class="tag" style="background:var(--navy);color:#fff">PM</span>{% endif %}</td>
         <td style="text-align:right;color:var(--green)">{{ bill }}</td>
-        <td style="text-align:right">{{ celkem }}</td></tr>
+        <td style="text-align:right">{{ celkem }}</td>
+        <td style="text-align:center">
+          {% if jmeno != z.projektovy_manazer %}
+          <form method="post" action="{{ url_for('main.zakazka_pm', id=z.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="jmeno" value="{{ jmeno }}">
+            <button type="submit" style="border:none;background:none;color:var(--cyan-dark);cursor:pointer;font-size:12px">nastavit PM</button>
+          </form>
+          {% else %}✓{% endif %}
+        </td>
+      </tr>
       {% else %}
-      <tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Žádné hodiny v Clockify (nebo nenapojeno).</td></tr>
+      <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Žádné hodiny v Clockify (nebo nenapojeno).</td></tr>
       {% endfor %}
     </tbody>
   </table>

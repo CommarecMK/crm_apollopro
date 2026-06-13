@@ -129,11 +129,12 @@ def prehled():
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
 
-    # Měsíční tržby (hodiny × sazba) napříč firmou
-    trzby_mesic = []
+    # Měsíční tržby a fakt. hodiny — JEN aktivní zakázky
+    aktivni_zkr = {z.zkratka for z in zakazky}
+    trzby_mesic, bill_mesic = [], []
     for m, _, _ in data["serie"]:
-        s = sum(bzm.get(zk, {}).get(m, 0) * sazby.get(zk, 0) for zk in bzm)
-        trzby_mesic.append(round(s))
+        trzby_mesic.append(round(sum(bzm.get(zk, {}).get(m, 0) * sazby.get(zk, 0) for zk in aktivni_zkr)))
+        bill_mesic.append(round(sum(bzm.get(zk, {}).get(m, 0) for zk in aktivni_zkr), 1))
 
     kpi = {
         "trzby": round(sum(z.trzba_skutecnost for z in zakazky)),
@@ -156,7 +157,7 @@ def prehled():
 
     graf = {
         "labels": [MESICE_CZ[m][:3] for m, _, _ in data["serie"]],
-        "bill": [b for _, _, b in data["serie"]],
+        "bill": bill_mesic,
         "trzby": trzby_mesic,
     }
     return render_template("prehled.html", kpi=kpi, graf=graf, rozpad=rozpad,
@@ -258,15 +259,22 @@ def firma_detail(id):
     now = datetime.now(timezone.utc)
     zkratky = {z.zkratka for z in firma.zakazky}
     prehled = clockify.firma_prehled(zkratky, now.year, now.month)
-    perz = prehled["zakazky"]
+    per = prehled["per"]
+    mesice = prehled["mesice"]
+    nm = len(mesice)
+
+    # Per-zakázka YTD souhrn (pro tabulku – všechny zakázky)
     for z in firma.zakazky:
-        v = perz.get(z.zkratka) or {}
-        z.hodiny = v.get("celkem", 0.0)
-        z.hodiny_bill = v.get("bill", 0.0)
-        z.hodiny_nonbill = v.get("nonbill", 0.0)
-        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
+        arr = per.get(z.zkratka, {"tot": [0] * nm, "bill": [0] * nm})
+        z.hodiny = round(sum(arr["tot"]), 1)
+        z.hodiny_bill = round(sum(arr["bill"]), 1)
+        z.hodiny_nonbill = round(max(z.hodiny - z.hodiny_bill, 0), 1)
+        z._pocet_mesicu = sum(1 for m in mesice
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
-    serie = prehled["serie"]
+
+    # Graf, KPI a hodiny lidí = JEN AKTIVNÍ zakázky
+    aktivni = [z for z in firma.zakazky if z.je_aktivni]
+    aktivni_zkr = {z.zkratka for z in aktivni}
 
     def _akt_v_mesici(z, m):
         if z.datum_od and (now.year, m) < (z.datum_od.year, z.datum_od.month):
@@ -274,25 +282,26 @@ def firma_detail(id):
         if z.datum_do and (now.year, m) > (z.datum_do.year, z.datum_do.month):
             return False
         return True
-    # Rozpočet hodin dle smlouvy = měsíční kontrahované hodiny (typ "mesicni") aktivní v daném měsíci
-    rozpocet_mesic = []
-    for m, _, _ in serie:
-        rozpocet_mesic.append(round(sum((z.rozpocet_hodin_mesic or 0) for z in firma.zakazky
+    serie_bill, serie_tot, rozpocet_mesic = [], [], []
+    for i, m in enumerate(mesice):
+        serie_bill.append(round(sum(per.get(zk, {"bill": [0]*nm})["bill"][i] for zk in aktivni_zkr), 1))
+        serie_tot.append(round(sum(per.get(zk, {"tot": [0]*nm})["tot"][i] for zk in aktivni_zkr), 1))
+        rozpocet_mesic.append(round(sum((z.rozpocet_hodin_mesic or 0) for z in aktivni
                                         if z.typ_rozpoctu == "mesicni" and _akt_v_mesici(z, m))))
-    graf = {"labels": [MESICE_CZ[m][:3] for m, _, _ in serie],
-            "celkem": [t for _, t, _ in serie],
-            "bill": [b for _, _, b in serie],
-            "rozpocet": rozpocet_mesic}
-    kpi = {"pocet": len(firma.zakazky),
-           "hodin_bill": round(sum(z.hodiny_bill for z in firma.zakazky), 1),
+    graf = {"labels": [MESICE_CZ[m][:3] for m in mesice],
+            "celkem": serie_tot, "bill": serie_bill, "rozpocet": rozpocet_mesic}
+    kpi = {"pocet": len(aktivni),
+           "hodin_bill": round(sum(z.hodiny_bill for z in aktivni), 1),
            "rozpocet_h": round(sum(rozpocet_mesic)),
-           "trzby": round(sum(z.trzba_skutecnost for z in firma.zakazky)),
-           "potencial": round(sum(z.nenaplneny_potencial for z in firma.zakazky))}
+           "trzby": round(sum(z.trzba_skutecnost for z in aktivni)),
+           "potencial": round(sum(z.nenaplneny_potencial for z in aktivni))}
     od_rok = f"{now.year}-01-01T00:00:00Z"
     do_ted = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    uzivatele = clockify.hodiny_uzivatele_firma(zkratky, od_rok, do_ted)
+    uzivatele = clockify.hodiny_uzivatele_firma(aktivni_zkr, od_rok, do_ted)
+    # PM jména napříč aktivními zakázkami (pro označení v tabulce lidí)
+    pm_jmena = {z.projektovy_manazer.strip() for z in aktivni if z.projektovy_manazer}
     return render_template("firma_detail.html", firma=firma, graf=graf, kpi=kpi,
-                           rok=now.year, uzivatele=uzivatele)
+                           rok=now.year, uzivatele=uzivatele, pm_jmena=pm_jmena)
 
 
 @bp.route("/firmy/<int:id>/nacist", methods=["POST"])
@@ -403,6 +412,16 @@ def zakazka_detail(id):
         "trzba": [round((bil) * (z.hodinova_sazba or 0)) for _, _, bil in serie],
     }
     return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year, uzivatele=uzivatele)
+
+
+@bp.route("/zakazka/<int:id>/pm", methods=["POST"])
+@login_required
+def zakazka_pm(id):
+    z = Zakazka.query.get_or_404(id)
+    z.projektovy_manazer = request.form.get("jmeno", "").strip() or None
+    db.session.commit()
+    flash(f"PM nastaven: {z.projektovy_manazer or '—'}", "info")
+    return redirect(url_for("main.zakazka_detail", id=id))
 
 
 @bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])

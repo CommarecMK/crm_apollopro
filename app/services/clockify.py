@@ -197,37 +197,31 @@ def obohat_zakazky_obdobi(zakazky, periods):
 
 
 def firma_prehled(zkratky, rok, do_mesic):
-    """Pro kartu klienta: vrátí per-zakázku YTD souhrn + měsíční řadu (součet za klienta).
-    zkratky = set zkratek klienta. Jeden průchod přes měsíce."""
-    prazdny = {"zakazky": {}, "serie": []}
+    """Pro kartu klienta: per-zakázku měsíční hodiny (total i billable).
+    Vrací {zkr: {'tot':[...], 'bill':[...]}} pro měsíce 1..do_mesic + 'mesice'."""
+    mesice = list(range(1, do_mesic + 1))
+    prazdny = {"per": {z: {"tot": [0] * do_mesic, "bill": [0] * do_mesic} for z in zkratky}, "mesice": mesice}
     if not je_nakonfigurovano() or not zkratky:
         return prazdny
     try:
         import calendar as _cal
         ws = _workspace_id()
-        id2zkr = {}
-        for k in _seznam(ws, "clients"):
-            zkr = (k.get("note") or "").strip()
-            if zkr in zkratky:
-                id2zkr[k.get("id")] = zkr
-        per = {z: {"celkem": 0, "bill": 0, "nonbill": 0} for z in zkratky}
-        serie = []
-        for m in range(1, do_mesic + 1):
+        id2zkr = {k.get("id"): (k.get("note") or "").strip()
+                  for k in _seznam(ws, "clients") if (k.get("note") or "").strip() in set(zkratky)}
+        per = {z: {"tot": [0] * do_mesic, "bill": [0] * do_mesic} for z in zkratky}
+        for i, m in enumerate(mesice):
             posl = _cal.monthrange(rok, m)[1]
             od = f"{rok}-{m:02d}-01T00:00:00Z"
             do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
-            mtot = mbill = 0
-            tot_map = {cid: h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do)}
-            bill_map = {cid: h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do, billable=True)}
-            for cid, zkr in id2zkr.items():
-                t = tot_map.get(cid, 0); b = bill_map.get(cid, 0)
-                per[zkr]["celkem"] += t; per[zkr]["bill"] += b
-                mtot += t; mbill += b
-            serie.append((m, round(mtot, 1), round(mbill, 1)))
-        for v in per.values():
-            v["nonbill"] = round(max(v["celkem"] - v["bill"], 0), 1)
-            v["celkem"] = round(v["celkem"], 1); v["bill"] = round(v["bill"], 1)
-        return {"zakazky": per, "serie": serie}
+            for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do):
+                z = id2zkr.get(cid)
+                if z:
+                    per[z]["tot"][i] += h
+            for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do, billable=True):
+                z = id2zkr.get(cid)
+                if z:
+                    per[z]["bill"][i] += h
+        return {"per": per, "mesice": mesice}
     except Exception as e:
         print(f"[clockify] firma_prehled: {e}")
         return prazdny
@@ -237,6 +231,10 @@ def _hodiny_uzivatele_ids(ws, ids, datum_od, datum_do):
     """Hodiny po zaměstnancích pro dané client-id. [(jmeno, celkem, bill)]."""
     if not ids:
         return []
+    ck = f"usr:{ws}:{','.join(sorted(ids))}:{datum_od}:{datum_do}"
+    c = _cache_get(ck)
+    if c is not None:
+        return c
 
     def _po_uzivatelich(billable=None):
         body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
@@ -252,7 +250,7 @@ def _hodiny_uzivatele_ids(ws, ids, datum_od, datum_do):
 
     tot, bil = _po_uzivatelich(), _po_uzivatelich(True)
     out = [(nm, h, bil.get(uid, ("", 0))[1]) for uid, (nm, h) in tot.items()]
-    return sorted(out, key=lambda x: -x[1])
+    return _cache_set(ck, sorted(out, key=lambda x: -x[1]))
 
 
 def hodiny_dle_uzivatelu(zkratka, datum_od, datum_do):
