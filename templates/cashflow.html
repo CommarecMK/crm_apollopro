@@ -1,46 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Cashflow — výhled</h1>
-<p class="muted" style="margin-bottom:18px">Odhad plánované fakturace na 12 měsíců dopředu</p>
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Cashflow</h1>
+<p class="muted" style="margin-bottom:18px">Historie (skutečně fakturováno) · aktuální měsíc · výhled (plán)
+  {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
 
 <div class="stats">
-  <div class="stat"><div class="num">{{ "{:,.0f}".format(celkem).replace(",", " ") }}</div><div class="lbl">Výhled fakturace 12 měsíců (Kč)</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ "{:,.0f}".format(kpi.fakt_minulost).replace(",", " ") }}</div><div class="lbl">Fakturováno (6 měs. + aktuální)</div></div>
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.vyhled).replace(",", " ") }}</div><div class="lbl">Výhled (6 měs. dopředu)</div></div>
+  <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál</div></div>
 </div>
 
 <div class="stat" style="margin-bottom:20px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Předpokládaná fakturace po měsících</h3>
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Plán vs. skutečně fakturováno (Kč)</h3>
   <canvas id="grafCf" height="90"></canvas>
 </div>
 
 <table>
-  <thead><tr><th>Měsíc</th><th style="text-align:right">Předpokládaná fakturace (Kč)</th></tr></thead>
+  <thead><tr><th>Měsíc</th><th style="text-align:right">Plán (Kč)</th>
+    <th style="text-align:right">Fakturováno (Kč)</th><th style="text-align:right">Potenciál (Kč)</th></tr></thead>
   <tbody>
     {% for r in radky %}
-    <tr><td>{{ r.label }}</td><td style="text-align:right"><b>{{ "{:,.0f}".format(r.castka).replace(",", " ") }}</b></td></tr>
+    <tr style="{{ 'background:var(--n8);font-weight:600' if r.obdobi=='ted' }}">
+      <td>{{ r.label }}{% if r.obdobi=='ted' %} <span class="tag" style="background:var(--cyan);color:#fff">teď</span>{% elif r.obdobi=='vyhled' %} <span class="tag">výhled</span>{% endif %}</td>
+      <td style="text-align:right">{{ "{:,.0f}".format(r.plan).replace(",", " ") if r.plan else '—' }}</td>
+      <td style="text-align:right;color:var(--green)">{{ "{:,.0f}".format(r.fakt).replace(",", " ") if r.obdobi!='vyhled' else '—' }}</td>
+      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(r.potencial).replace(",", " ") if (r.obdobi!='vyhled' and r.potencial) else '—' }}</td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>
 
 {% if bez_terminu %}
 <div class="note" style="margin-top:16px">
-  <b>Bez termínů (nezahrnuto do výhledu):</b> {{ bez_terminu|join(", ") }}.
-  Doplň u nich datum od/do, ať se rozloží do cashflow.
+  <b>Bez termínů (nezahrnuto do výhledu):</b> {{ bez_terminu|join(", ") }}. Doplň datum od/do.
 </div>
 {% endif %}
 
 <p class="muted" style="font-size:12px;margin-top:14px">
-  Odhad: měsíční zakázky = hodiny/měsíc × sazba · projektové = částka rovnoměrně přes dobu trvání ·
-  analýzy = 40 % na začátku, 60 % při odevzdání. První verze — doladíme dle reality.
+  Skutečně fakturováno = fakturovatelné hodiny × sazba (z Clockify). Plán = měsíční sazba / částka rovnoměrně /
+  analýzy 40–60 %. Potenciál = plán − fakturováno.
 </p>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const CF = {{ graf|tojson }};
 if (document.getElementById('grafCf')) new Chart(document.getElementById('grafCf'), {
-  type:'bar',
-  data:{labels:CF.labels, datasets:[{label:'Fakturace (Kč)', data:CF.castky, backgroundColor:'#173767'}]},
-  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}
+  data:{labels:CF.labels, datasets:[
+    {type:'bar', label:'Skutečně fakturováno', data:CF.fakt, backgroundColor:'#34C759'},
+    {type:'line', label:'Plán', data:CF.plan, borderColor:'#173767', backgroundColor:'#173767', tension:.3, pointRadius:3}
+  ]},
+  options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}}}
 });
 </script>
 {% endblock %}

@@ -361,18 +361,20 @@ def pm_prehled():
 @bp.route("/cashflow")
 @finance_required
 def cashflow():
-    """Odhad cashflow — plánovaná fakturace rozložená do měsíců (výhled 12 měsíců)."""
+    """Cashflow: historie (skutečně fakturováno + potenciál), aktuální měsíc, výhled (plán)."""
     now = datetime.now(timezone.utc)
+    snap, updated = snapshot.nacti()
+    hod = snap.get("hodiny", {})
     zakazky = _bez_internich(Zakazka.query.join(Firma)
               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    teď = (now.year, now.month)
 
-    # Horizont: 12 měsíců od aktuálního
-    horizon, r, m = [], now.year, now.month
-    for _ in range(12):
-        horizon.append((r, m))
-        m += 1
-        if m == 13:
-            m, r = 1, r + 1
+    def _add(y, m, delta):
+        idx = y * 12 + (m - 1) + delta
+        return idx // 12, idx % 12 + 1
+
+    # Okno: 6 měsíců zpět … aktuální … 6 měsíců vpřed
+    okno = [_add(now.year, now.month, d) for d in range(-6, 7)]
 
     def _mesicu_mezi(od, do):
         return (do.year - od.year) * 12 + (do.month - od.month) + 1
@@ -391,26 +393,44 @@ def cashflow():
             if z.datum_do and ym == (z.datum_do.year, z.datum_do.month):
                 return 0.6 * c
             return 0
-        # projektový — rovnoměrně přes dobu trvání
         total = z.budget_castka or (z.rozpocet_hodin or 0) * (z.hodinova_sazba or 0)
         if total and z.datum_od and z.datum_do:
             n = _mesicu_mezi(z.datum_od, z.datum_do)
             return total / n if n > 0 else 0
         return 0
 
-    sumy = [0] * 12
     bez_terminu = []
     for z in zakazky:
         if z.typ_rozpoctu in ("projektovy", "analyza") and (z.budget_castka or z.rozpocet_hodin) and not (z.datum_od and z.datum_do):
             bez_terminu.append(z.nazev)
-        for i, ym in enumerate(horizon):
-            sumy[i] += _plan(z, ym)
 
-    radky = [{"label": f"{MESICE_CZ[mm]} {rr}", "castka": round(s)} for (rr, mm), s in zip(horizon, sumy)]
-    graf = {"labels": [f"{MESICE_CZ[mm][:3]} {str(rr)[2:]}" for rr, mm in horizon],
-            "castky": [round(s) for s in sumy]}
-    return render_template("cashflow.html", radky=radky, graf=graf,
-                           celkem=round(sum(sumy)), bez_terminu=bez_terminu)
+    radky = []
+    for ym in okno:
+        y, m = ym
+        key = f"{y}-{m:02d}"
+        je_minulost_nebo_ted = ym <= teď
+        plan = sum(_plan(z, ym) for z in zakazky)
+        # skutečně fakturováno = fakturovatelné hodiny × efektivní sazba (jen minulost + aktuální měsíc)
+        fakt = 0
+        if je_minulost_nebo_ted:
+            fakt = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in zakazky)
+        potencial = max(plan - fakt, 0) if je_minulost_nebo_ted else 0
+        radky.append({
+            "label": f"{MESICE_CZ[m]} {y}", "kratky": f"{MESICE_CZ[m][:3]} {str(y)[2:]}",
+            "obdobi": "minulost" if ym < teď else ("ted" if ym == teď else "vyhled"),
+            "plan": round(plan), "fakt": round(fakt), "potencial": round(potencial),
+        })
+
+    kpi = {
+        "fakt_minulost": round(sum(r["fakt"] for r in radky if r["obdobi"] != "vyhled")),
+        "vyhled": round(sum(r["plan"] for r in radky if r["obdobi"] == "vyhled")),
+        "potencial": round(sum(r["potencial"] for r in radky)),
+    }
+    graf = {"labels": [r["kratky"] for r in radky],
+            "plan": [r["plan"] for r in radky],
+            "fakt": [r["fakt"] for r in radky]}
+    return render_template("cashflow.html", radky=radky, graf=graf, kpi=kpi,
+                           bez_terminu=bez_terminu, updated=updated)
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────
