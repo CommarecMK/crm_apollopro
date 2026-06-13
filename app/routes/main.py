@@ -423,14 +423,19 @@ def pm_prehled():
     snap, updated = snapshot.nacti()
     hod = snap.get("hodiny", {})
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
-    zakazky = _bez_internich(Zakazka.query.join(Firma)
-              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    f_aktivita = request.args.get("aktivita", "aktivni")
+    q = _bez_internich(Zakazka.query.join(Firma))
+    if f_aktivita == "aktivni":
+        q = q.filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))
+    elif f_aktivita == "neaktivni":
+        q = q.filter(db.or_(Zakazka.aktivni.is_(False), Firma.aktivni.is_(False)))
+    zakazky = q.all()
     pm = {}
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
         z.hodiny = z.hodiny_bill
         fakt, pot, plan = _fin_mesicne(z, hod, now.month, now.year)
-        key = (z.projektovy_manazer or "").strip() or "— bez PM —"
+        key = z.efekt_pm or "— bez PM —"
         d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0})
         d["zakazek"] += 1
         d["hodin"] += z.hodiny_bill
@@ -446,7 +451,8 @@ def pm_prehled():
     graf = {"labels": [r["pm"] for r in radky],
             "trzby": [r["trzby"] for r in radky],
             "potencial": [r["potencial"] for r in radky]}
-    return render_template("pm.html", radky=radky, graf=graf, rok=now.year, updated=updated)
+    return render_template("pm.html", radky=radky, graf=graf, rok=now.year, updated=updated,
+                           f_aktivita=f_aktivita)
 
 
 @bp.route("/pm/<path:jmeno>")
@@ -460,9 +466,9 @@ def pm_detail(jmeno):
     vsechny = _bez_internich(Zakazka.query.join(Firma)
               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
     if jmeno == "— bez PM —":
-        zakazky = [z for z in vsechny if not (z.projektovy_manazer or "").strip()]
+        zakazky = [z for z in vsechny if not z.efekt_pm]
     else:
-        zakazky = [z for z in vsechny if (z.projektovy_manazer or "").strip() == jmeno]
+        zakazky = [z for z in vsechny if z.efekt_pm == jmeno]
 
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
@@ -641,7 +647,7 @@ def firma_detail(id):
            "trzby": round(sum(z.trzba_skutecnost for z in aktivni)),
            "potencial": round(sum(z.nenaplneny_potencial for z in aktivni))}
     uzivatele = snapshot.uzivatele_zkr(snap, aktivni_zkr)
-    pm_jmena = {z.projektovy_manazer.strip() for z in aktivni if z.projektovy_manazer}
+    pm_jmena = {z.efekt_pm for z in aktivni if z.efekt_pm}
 
     # Finanční stacked graf vč. budoucnosti (fakturováno + potenciál + budoucí plán)
     graf_fin = _fin_serie(aktivni, hod, _okno_mesicu(now), (now.year, now.month))
@@ -678,6 +684,16 @@ def zakazka_toggle(id):
     z.aktivni = not z.aktivni
     db.session.commit()
     return redirect(url_for("main.firma_detail", id=z.firma_id))
+
+
+@bp.route("/firmy/<int:id>/pm", methods=["POST"])
+@login_required
+def firma_pm(id):
+    f = Firma.query.get_or_404(id)
+    f.projektovy_manazer = request.form.get("jmeno", "").strip() or None
+    db.session.commit()
+    flash(f"PM klienta nastaven: {f.projektovy_manazer or '—'}", "info")
+    return redirect(url_for("main.firma_detail", id=id))
 
 
 @bp.route("/firmy/<int:id>/upravit", methods=["GET", "POST"])

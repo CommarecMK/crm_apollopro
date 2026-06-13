@@ -9,7 +9,7 @@
       {% if not z.je_aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}
     </h1>
     <p class="muted">{{ z.zkratka }} · IČO {{ z.ico }} · typ rozpočtu: <b>{{ z.typ_rozpoctu }}</b>
-      · PM: <b>{{ z.projektovy_manazer or '—' }}</b></p>
+      · PM: <b>{{ z.efekt_pm or '—' }}</b>{% if not z.projektovy_manazer and z.efekt_pm %} <span class="muted">(z klienta)</span>{% endif %}</p>
   </div>
   {% if smi_zakazky() %}<a class="btn" href="{{ url_for('main.zakazka_upravit', id=z.id) }}">Upravit ✎</a>{% endif %}
 </div>
@@ -37,11 +37,11 @@
     <tbody>
       {% for jmeno, celkem, bill in uzivatele %}
       <tr>
-        <td>{{ jmeno }}{% if z.projektovy_manazer and jmeno == z.projektovy_manazer %} <span class="tag" style="background:var(--navy);color:#fff">PM</span>{% endif %}</td>
+        <td>{{ jmeno }}{% if z.efekt_pm and jmeno == z.efekt_pm %} <span class="tag" style="background:var(--navy);color:#fff">PM</span>{% endif %}</td>
         <td style="text-align:right;color:var(--green)">{{ bill }}</td>
         <td style="text-align:right">{{ celkem }}</td>
         <td style="text-align:center">
-          {% if jmeno == z.projektovy_manazer %}✓
+          {% if jmeno == z.efekt_pm %}✓
           {% else %}
           <form method="post" action="{{ url_for('main.zakazka_pm', id=z.id) }}" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

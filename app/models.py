@@ -22,6 +22,7 @@ class Firma(db.Model):
     zamestnanci  = db.Column(db.String(80))    # rozsah z MERK
     obrat        = db.Column(db.String(80))     # rozsah z MERK
     merk_nacteno = db.Column(db.String(40))    # datum posledního natažení
+    projektovy_manazer = db.Column(db.String(120))  # PM klienta (dědí se na zakázky)
     rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
     aktivni      = db.Column(db.Boolean, default=True)     # aktivní / neaktivní klient
 
@@ -131,6 +132,12 @@ class Zakazka(db.Model):
     def je_aktivni(self):
         """Efektivní aktivita: zakázka je aktivní jen když je aktivní i klient."""
         return bool(self.aktivni and (self.firma.aktivni if self.firma else True))
+
+    @property
+    def efekt_pm(self):
+        """PM zakázky: vlastní (override), jinak PM klienta."""
+        return (self.projektovy_manazer or "").strip() or \
+               ((self.firma.projektovy_manazer or "").strip() if self.firma else "")
 
     @property
     def _mesicu(self):

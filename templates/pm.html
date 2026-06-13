@@ -5,6 +5,14 @@
 <p class="muted" style="margin-bottom:18px">Kdo a jak pracuje · rok {{ rok }}
   {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
 
+<form class="filters" method="get" style="margin-bottom:18px">
+  <select name="aktivita" onchange="this.form.submit()">
+    {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
+      <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>
+    {% endfor %}
+  </select>
+</form>
+
 <div class="stat" style="margin-bottom:20px">
   <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno vs. nenaplněný potenciál podle PM (Kč)</h3>
   <canvas id="grafPm" height="90"></canvas>

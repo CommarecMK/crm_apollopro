@@ -107,7 +107,7 @@
         <tr>
           <td><a href="{{ url_for('main.zakazka_detail', id=z.id) }}">{{ z.nazev }}</a> <span class="code">{{ z.zkratka }}</span></td>
           <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
-          <td>{{ z.projektovy_manazer or '—' }}</td>
+          <td>{{ z.efekt_pm or '—' }}{% if not z.projektovy_manazer and z.efekt_pm %} <span class="muted" style="font-size:11px">(klient)</span>{% endif %}</td>
           <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
           {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>{% endif %}
           <td style="text-align:center">
@@ -157,6 +157,15 @@
 
   <!-- Akce -->
   <div>
+  <div class="stat" style="margin-bottom:18px">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Projektový manažer klienta</h3>
+    <form method="post" action="{{ url_for('main.firma_pm', id=firma.id) }}" style="display:flex;gap:8px">
+      <input type="text" name="jmeno" value="{{ firma.projektovy_manazer or '' }}" placeholder="jméno PM"
+             style="flex:1;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+      <button class="btn" type="submit">Uložit</button>
+    </form>
+    <p class="muted" style="font-size:12px;margin-top:8px">Platí pro všechny zakázky klienta. U konkrétní zakázky lze přepsat na jejím detailu.</p>
+  </div>
   {% if smi_zakazky() %}
   <div class="stat" style="margin-bottom:18px">
     <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Klient</h3>

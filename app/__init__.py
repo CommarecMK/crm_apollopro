@@ -81,6 +81,7 @@ def _inline_migrace():
                 "obrat": "VARCHAR(80)", "merk_nacteno": "VARCHAR(40)",
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
                 "aktivni": "BOOLEAN DEFAULT TRUE",
+                "projektovy_manazer": "VARCHAR(120)",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
