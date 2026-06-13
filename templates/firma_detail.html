@@ -1,21 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
+{% set istyl = "padding:8px 10px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
 
 <p style="margin-bottom:6px"><a href="{{ url_for('main.firmy') }}">← Firmy</a></p>
-<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-  <h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
-    {{ firma.nazev }}
-    {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
-    {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
-  </h1>
-  {% if pm_jmena %}<div style="color:var(--cyan);font-weight:700;font-size:16px">PM: {{ pm_jmena|join(", ") }}</div>{% endif %}
-</div>
-<p class="muted" style="margin-bottom:18px">
-  <span class="tag" style="{{ 'background:var(--orange);color:#fff' if firma.typ_subjektu=='dodavatel' }}">{{ 'Dodavatel' if firma.typ_subjektu=='dodavatel' else 'Klient' }}</span>
-  · IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
-  {% if not firma.aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní klient</span>{% endif %}</p>
 
-<!-- KPI klienta (rok) -->
+<!-- Hlavička: název + aktivita -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:6px">
+  <div>
+    <h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
+      {{ firma.nazev }}
+      {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
+      {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
+    </h1>
+    <p class="muted">
+      <span class="tag" style="{{ 'background:var(--orange);color:#fff' if firma.typ_subjektu=='dodavatel' }}">{{ 'Dodavatel' if firma.typ_subjektu=='dodavatel' else 'Klient' }}</span>
+      · IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
+      {% if pm_jmena %} · PM: <b style="color:var(--cyan-dark)">{{ pm_jmena|join(", ") }}</b>{% endif %}
+    </p>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    {% if smi_zakazky() %}
+    <form method="post" action="{{ url_for('main.firma_toggle', id=firma.id) }}" style="display:flex;align-items:center;gap:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <span class="muted" style="font-size:13px">{{ 'Aktivní' if firma.aktivni else 'Neaktivní' }}</span>
+      <label class="switch"><input type="checkbox" {{ 'checked' if firma.aktivni }} onchange="this.form.submit()"><span class="slider"></span></label>
+    </form>
+    {% elif not firma.aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}
+  </div>
+</div>
+
+<!-- KPI -->
 <div class="stats">
   <div class="stat"><div class="num">{{ kpi.pocet }}</div><div class="lbl">Zakázek</div></div>
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
@@ -27,182 +41,160 @@
   {% endif %}
 </div>
 
-<!-- Graf po měsících -->
-<div class="stat" style="margin-bottom:20px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny po měsících — {{ rok }}</h3>
-  <canvas id="grafFirma" height="90"></canvas>
-</div>
-
-{% if vidi_finance() %}
-<div class="stat" style="margin-bottom:20px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno + nenaplněný potenciál (= plán) — {{ rok }}</h3>
-  <canvas id="grafFinFirma" height="90"></canvas>
-</div>
-{% endif %}
-
-<div class="cols2">
-  <div>
-    <!-- Údaje o firmě -->
-    <div class="stat" style="margin-bottom:18px">
-      <table style="box-shadow:none">
-        <tbody>
-          <tr><td style="width:160px;color:#667">Adresa</td><td>{{ firma.adresa or '—' }}</td></tr>
-          <tr><td style="color:#667">Web</td><td>{% if firma.web %}<a href="{{ firma.web }}" target="_blank">{{ firma.web }}</a>{% else %}—{% endif %}</td></tr>
-          <tr><td style="color:#667">Obor</td><td>{{ firma.obor or '—' }}</td></tr>
-          <tr><td style="color:#667">Zaměstnanci</td><td>{{ firma.zamestnanci or '—' }}</td></tr>
-          <tr><td style="color:#667">Obrat</td><td>{{ firma.obrat or '—' }}</td></tr>
-          <tr><td style="color:#667">Doplněno</td><td class="muted">{{ firma.merk_nacteno or 'zatím nenačteno' }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Kontakty -->
-    <h2 style="color:var(--navy);font-size:18px;margin:8px 0 10px">Kontakty</h2>
-    <table>
-      <thead><tr><th>Jméno</th><th>Pozice</th><th>E-mail</th><th>Telefon</th><th>Zdroj</th><th></th></tr></thead>
-      <tbody>
-        {% for k in firma.kontakty %}
-        <tr>
-          <td><b>{{ k.jmeno }}</b>{% if k.rucne_upraveno %} <span title="Ručně upraveno" style="color:var(--cyan-dark)">✎</span>{% endif %}</td>
-          <td>{{ k.pozice or '—' }}</td>
-          <td>{{ k.email or '—' }}</td><td>{{ k.telefon or '—' }}</td>
-          <td><span class="tag">{{ k.zdroj }}</span></td>
-          <td style="white-space:nowrap;text-align:right">
-            {% if smi_klient() %}
-            <a href="{{ url_for('main.kontakt_upravit', id=k.id) }}">Upravit</a>
-            <form method="post" action="{{ url_for('main.kontakt_smazat', id=k.id) }}" style="display:inline"
-                  onsubmit="return confirm('Smazat kontakt {{ k.jmeno }}?')">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Zatím žádné kontakty. Načti je z MERK nebo přidej ručně.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <!-- Přidat kontakt -->
-    {% if smi_klient() %}
-    <form method="post" action="{{ url_for('main.kontakt_novy', id=firma.id) }}"
-          style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="text" name="jmeno" placeholder="Jméno" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <input type="text" name="pozice" placeholder="Pozice" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <input type="text" name="email" placeholder="E-mail" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <input type="text" name="telefon" placeholder="Telefon" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <button class="btn" type="submit">+ Přidat kontakt</button>
-    </form>
-    {% endif %}
-
-    <!-- Zakázky firmy -->
-    <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
-    {% if not firma.aktivni %}<p class="muted" style="font-size:12px;margin-bottom:8px">Klient je neaktivní → všechny jeho zakázky jsou neaktivní.</p>{% endif %}
-    <table>
-      <thead><tr><th>Zakázka</th><th>Typ</th><th>PM</th><th style="text-align:right">Fakt. h</th>{% if vidi_finance() %}<th style="text-align:right">Tržba Kč</th>{% endif %}<th style="text-align:center">Aktivní</th></tr></thead>
-      <tbody>
-        {% for z in firma.zakazky %}
-        <tr>
-          <td><a href="{{ url_for('main.zakazka_detail', id=z.id) }}">{{ z.nazev }}</a> <span class="code">{{ z.zkratka }}</span></td>
-          <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
-          <td>{{ z.efekt_pm or '—' }}{% if not z.projektovy_manazer and z.efekt_pm %} <span class="muted" style="font-size:11px">(klient)</span>{% endif %}</td>
-          <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
-          {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>{% endif %}
-          <td style="text-align:center">
-            {% if smi_zakazky() %}
-            <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <label class="switch">
-                <input type="checkbox" {{ 'checked' if z.aktivni }} {{ 'disabled' if not firma.aktivni }}
-                       onchange="this.form.submit()">
-                <span class="slider"></span>
-              </label>
-            </form>
-            {% else %}{{ 'Ano' if z.je_aktivni else 'Ne' }}{% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    {% if smi_zakazky() %}
-    <form method="post" action="{{ url_for('main.zakazka_nova', id=firma.id) }}"
-          style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="text" name="nazev" placeholder="Název zakázky (např. Interim)" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <input type="text" name="typ_sluzby" placeholder="Typ služby" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
-      <button class="btn" type="submit">+ Přidat zakázku</button>
-    </form>
-    {% endif %}
-
-    <!-- Hodiny podle zaměstnanců (celý klient) -->
-    <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Hodiny podle zaměstnanců — {{ rok }}</h2>
-    <table>
-      <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Celkem h</th></tr></thead>
-      <tbody>
-        {% for jmeno, celkem, bill in uzivatele %}
-        <tr><td>{{ jmeno }}{% if jmeno in pm_jmena %} <span class="tag" style="background:var(--navy);color:#fff">PM</span>{% endif %}</td>
-          <td style="text-align:right;color:var(--green)">{{ bill }}</td>
-          <td style="text-align:right">{{ celkem }}</td></tr>
-        {% else %}
-        <tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Žádné hodiny v Clockify (nebo nenapojeno).</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<!-- Grafy -->
+<div class="cols11">
+  <div class="stat">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny po měsících — {{ rok }}</h3>
+    <canvas id="grafFirma" height="110"></canvas>
   </div>
-
-  <!-- Akce -->
-  <div>
-  <div class="stat" style="margin-bottom:18px">
-    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Projektový manažer klienta</h3>
-    <form method="post" action="{{ url_for('main.firma_pm', id=firma.id) }}" style="display:flex;gap:8px">
-      <input type="text" name="jmeno" value="{{ firma.projektovy_manazer or '' }}" placeholder="jméno PM"
-             style="flex:1;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
-      <button class="btn" type="submit">Uložit</button>
-    </form>
-    <p class="muted" style="font-size:12px;margin-top:8px">Platí pro všechny zakázky klienta. U konkrétní zakázky lze přepsat na jejím detailu.</p>
-  </div>
-  {% if smi_zakazky() %}
-  <div class="stat" style="margin-bottom:18px">
-    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Klient</h3>
-    <form method="post" action="{{ url_for('main.firma_toggle', id=firma.id) }}" style="display:flex;align-items:center;gap:10px">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="switch">
-        <input type="checkbox" {{ 'checked' if firma.aktivni }} onchange="this.form.submit()">
-        <span class="slider"></span>
-      </label>
-      <span>{{ 'Aktivní' if firma.aktivni else 'Neaktivní' }}</span>
-    </form>
-    <p class="muted" style="font-size:12px;margin-top:8px">Neaktivní klient = všechny jeho zakázky neaktivní.</p>
+  {% if vidi_finance() %}
+  <div class="stat">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno + potenciál (= plán) — {{ rok }}</h3>
+    <canvas id="grafFinFirma" height="110"></canvas>
   </div>
   {% endif %}
+</div>
 
+<!-- Zakázky -->
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Zakázky</h2>
+{% if not firma.aktivni %}<p class="muted" style="font-size:12px;margin-bottom:8px">Klient je neaktivní → všechny jeho zakázky jsou neaktivní.</p>{% endif %}
+<table>
+  <thead><tr><th>Zakázka</th><th>Typ</th><th>PM</th><th style="text-align:right">Fakt. h</th>{% if vidi_finance() %}<th style="text-align:right">Tržba Kč</th>{% endif %}<th style="text-align:center">Aktivní</th></tr></thead>
+  <tbody>
+    {% for z in firma.zakazky %}
+    <tr>
+      <td><a href="{{ url_for('main.zakazka_detail', id=z.id) }}">{{ z.nazev }}</a> <span class="code">{{ z.zkratka }}</span></td>
+      <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+      <td>{{ z.efekt_pm or '—' }}{% if not z.projektovy_manazer and z.efekt_pm %} <span class="muted" style="font-size:11px">(klient)</span>{% endif %}</td>
+      <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
+      {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>{% endif %}
+      <td style="text-align:center">
+        {% if smi_zakazky() %}
+        <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="switch"><input type="checkbox" {{ 'checked' if z.aktivni }} {{ 'disabled' if not firma.aktivni }} onchange="this.form.submit()"><span class="slider"></span></label>
+        </form>
+        {% else %}{{ 'Ano' if z.je_aktivni else 'Ne' }}{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if smi_zakazky() %}
+<form method="post" action="{{ url_for('main.zakazka_nova', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="text" name="nazev" placeholder="Název zakázky (např. Interim)" required style="{{ istyl }}">
+  <input type="text" name="typ_sluzby" placeholder="Typ služby" style="{{ istyl }}">
+  <button class="btn" type="submit">+ Přidat zakázku</button>
+</form>
+{% endif %}
+
+<!-- Hodiny podle zaměstnanců + nastavení PM klienta -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin:24px 0 10px;flex-wrap:wrap;gap:8px">
+  <h2 style="color:var(--navy);font-size:18px;margin:0">Hodiny podle zaměstnanců — {{ rok }}</h2>
+  {% if firma.projektovy_manazer %}
+  <form method="post" action="{{ url_for('main.firma_pm', id=firma.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="jmeno" value="">
+    <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Zrušit PM klienta</button>
+  </form>
+  {% endif %}
+</div>
+<p class="muted" style="font-size:12px;margin-bottom:8px">PM klienta nastavíš kliknutím na „nastavit PM" u zaměstnance — platí pro všechny zakázky klienta.</p>
+<table>
+  <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Celkem h</th><th style="text-align:center">PM klienta</th></tr></thead>
+  <tbody>
+    {% for jmeno, celkem, bill in uzivatele %}
+    <tr>
+      <td>{{ jmeno }}{% if jmeno == firma.projektovy_manazer %} <span class="tag" style="background:var(--navy);color:#fff">PM</span>{% endif %}</td>
+      <td style="text-align:right;color:var(--green)">{{ bill }}</td>
+      <td style="text-align:right">{{ celkem }}</td>
+      <td style="text-align:center">
+        {% if jmeno == firma.projektovy_manazer %}✓
+        {% else %}
+        <form method="post" action="{{ url_for('main.firma_pm', id=firma.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="jmeno" value="{{ jmeno }}">
+          <button type="submit" style="border:none;background:none;color:var(--cyan-dark);cursor:pointer;font-size:12px">nastavit PM</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Žádné hodiny v Clockify (nebo nenapojeno).</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Kontakty -->
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Kontakty</h2>
+<table>
+  <thead><tr><th>Jméno</th><th class="skryt-mobil">Pozice</th><th>E-mail</th><th class="skryt-mobil">Telefon</th><th class="skryt-mobil">Zdroj</th><th></th></tr></thead>
+  <tbody>
+    {% for k in firma.kontakty %}
+    <tr>
+      <td><b>{{ k.jmeno }}</b>{% if k.rucne_upraveno %} <span title="Ručně upraveno" style="color:var(--cyan-dark)">✎</span>{% endif %}</td>
+      <td class="skryt-mobil">{{ k.pozice or '—' }}</td>
+      <td>{{ k.email or '—' }}</td><td class="skryt-mobil">{{ k.telefon or '—' }}</td>
+      <td class="skryt-mobil"><span class="tag">{{ k.zdroj }}</span></td>
+      <td style="white-space:nowrap;text-align:right">
+        {% if smi_klient() %}
+        <a href="{{ url_for('main.kontakt_upravit', id=k.id) }}">Upravit</a>
+        <form method="post" action="{{ url_for('main.kontakt_smazat', id=k.id) }}" style="display:inline" onsubmit="return confirm('Smazat kontakt {{ k.jmeno }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Zatím žádné kontakty. Načti je z MERK nebo přidej ručně.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if smi_klient() %}
+<form method="post" action="{{ url_for('main.kontakt_novy', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="text" name="jmeno" placeholder="Jméno" required style="{{ istyl }}">
+  <input type="text" name="pozice" placeholder="Pozice" style="{{ istyl }}">
+  <input type="text" name="email" placeholder="E-mail" style="{{ istyl }}">
+  <input type="text" name="telefon" placeholder="Telefon" style="{{ istyl }}">
+  <button class="btn" type="submit">+ Přidat kontakt</button>
+</form>
+{% endif %}
+
+<!-- Údaje o firmě + MERK (dole) -->
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Údaje o firmě</h2>
+<div class="cols2">
+  <div class="stat">
+    <table style="box-shadow:none">
+      <tbody>
+        <tr><td style="width:160px;color:#667">Adresa</td><td>{{ firma.adresa or '—' }}</td></tr>
+        <tr><td style="color:#667">Web</td><td>{% if firma.web %}<a href="{{ firma.web }}" target="_blank">{{ firma.web }}</a>{% else %}—{% endif %}</td></tr>
+        <tr><td style="color:#667">Obor</td><td>{{ firma.obor or '—' }}</td></tr>
+        <tr><td style="color:#667">Zaměstnanci</td><td>{{ firma.zamestnanci or '—' }}</td></tr>
+        <tr><td style="color:#667">Obrat</td><td>{{ firma.obrat or '—' }}</td></tr>
+        <tr><td style="color:#667">Doplněno</td><td class="muted">{{ firma.merk_nacteno or 'zatím nenačteno' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
   {% if smi_klient() %}
   <div class="stat">
-    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Doplnit data</h3>
-    <p class="muted" style="font-size:13px;margin-bottom:14px">
-      Natáhne adresu, obor, obrat a kontakty z registru podle IČO (MERK, případně ARES).
-    </p>
-    <form method="post" action="{{ url_for('main.firma_nacist', id=firma.id) }}">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Data z registru</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:12px">Natáhne adresu, obor, obrat a kontakty podle IČO (MERK / ARES).</p>
+    <form method="post" action="{{ url_for('main.firma_nacist', id=firma.id) }}" style="margin-bottom:10px">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn" type="submit" {{ 'disabled' if not firma.ico }}>Načíst z MERK / ARES</button>
     </form>
-    {% if not firma.ico %}<p class="muted" style="font-size:12px;margin-top:8px">Chybí IČO.</p>{% endif %}
-    {% if firma.rucne_upraveno %}<p class="muted" style="font-size:12px;margin-top:8px">✎ Ručně upraveno — MERK pole firmy nepřepíše.</p>{% endif %}
-
-    <hr style="border:none;border-top:1px solid var(--n8);margin:16px 0">
-    <a class="btn btn-ghost" href="{{ url_for('main.firma_upravit', id=firma.id) }}" style="width:100%;text-align:center;display:block">Upravit ručně ✎</a>
+    {% if not firma.ico %}<p class="muted" style="font-size:12px">Chybí IČO.</p>{% endif %}
+    {% if firma.rucne_upraveno %}<p class="muted" style="font-size:12px">✎ Ručně upraveno — MERK pole nepřepíše.</p>{% endif %}
+    <a class="btn btn-ghost" href="{{ url_for('main.firma_upravit', id=firma.id) }}">Upravit ručně ✎</a>
   </div>
   {% endif %}
-  </div>
 </div>
 
 <!-- Připravované sekce -->
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:8px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px">
   {% for nazev, popis in [('Freelo úkoly','Úkoly a stav z Freelo'),('Zápisy','Poznámky z jednání'),('Aktuality','Co se u klienta děje')] %}
   <div class="stat" style="opacity:.7">
     <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
