@@ -56,12 +56,12 @@
 <table>
   <thead>
     <tr>
-      <th>Zakázka</th><th>Firma</th><th>Typ</th>
+      <th>Zakázka</th><th class="skryt-mobil">Firma</th><th class="skryt-mobil">Typ</th>
       <th style="text-align:right">Fakt. h</th>
-      <th style="text-align:right">Nefakt. h</th>
-      <th style="text-align:right">Rozpočet h</th>
+      <th style="text-align:right" class="skryt-mobil">Nefakt. h</th>
+      <th style="text-align:right" class="skryt-mobil">Rozpočet h</th>
       {% if vidi_finance() %}<th style="text-align:right">Tržba (Kč)</th>
-      <th style="text-align:right">Potenciál (Kč)</th>{% endif %}
+      <th style="text-align:right" class="skryt-mobil">Potenciál (Kč)</th>{% endif %}
       <th>Riziko</th>
     </tr>
   </thead>
@@ -72,13 +72,13 @@
         {% if z.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
         {% if not z.je_aktivni %} <span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}</div>
         <div class="code">{{ z.zkratka }}</div></td>
-      <td>{{ z.firma.nazev }}</td>
-      <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+      <td class="skryt-mobil">{{ z.firma.nazev }}</td>
+      <td class="skryt-mobil"><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
       <td style="text-align:right;color:var(--green)"><span class="hrs">{{ z.hodiny_bill }}</span></td>
-      <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
-      <td style="text-align:right">{{ z.rozpocet_hodin_efekt or '—' }}</td>
+      <td style="text-align:right;color:var(--orange)" class="skryt-mobil">{{ z.hodiny_nonbill }}</td>
+      <td style="text-align:right" class="skryt-mobil">{{ z.rozpocet_hodin_efekt or '—' }}</td>
       {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
-      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>{% endif %}
+      <td style="text-align:right;color:var(--red)" class="skryt-mobil">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>{% endif %}
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}
