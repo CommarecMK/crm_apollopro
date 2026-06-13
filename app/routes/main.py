@@ -65,6 +65,37 @@ def _fin_mesicne(z, hod, do_mesic, rok):
     return round(fakt), round(pot), round(plan)
 
 
+def _okno_mesicu(now, dopredu=6):
+    """Měsíce od ledna aktuálního roku po (aktuální měsíc + dopředu)."""
+    def add(y, m, d):
+        idx = y * 12 + (m - 1) + d
+        return idx // 12, idx % 12 + 1
+    konec = add(now.year, now.month, dopredu)
+    okno, cur = [], (now.year, 1)
+    while cur <= konec:
+        okno.append(cur)
+        cur = add(cur[0], cur[1], 1)
+    return okno
+
+
+def _fin_serie(zakazky, hod, okno, ted):
+    """3-segmentová měsíční řada: fakturováno (zelená, minulost) + potenciál (červená, minulost)
+    + budoucí plán (modrá). Vrací dict pro graf."""
+    labels, fakt, pot, budouci = [], [], [], []
+    for (y, m) in okno:
+        ym, key = (y, m), f"{y}-{m:02d}"
+        plan_m = sum(_plan_mesic(z, ym) for z in zakazky)
+        fakt_m = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in zakazky)
+        fakt_m += sum(fa.castka for z in zakazky for fa in z.faktury
+                      if fa.datum and fa.datum.strftime("%Y-%m") == key)
+        labels.append(f"{MESICE_ZKR[m]} {str(y)[2:]}")
+        if ym <= ted:
+            fakt.append(round(fakt_m)); pot.append(round(max(plan_m - fakt_m, 0))); budouci.append(0)
+        else:
+            fakt.append(0); pot.append(0); budouci.append(round(plan_m))
+    return {"labels": labels, "fakt": fakt, "pot": pot, "budouci": budouci}
+
+
 def _bez_internich(q):
     """Odfiltruje interní zakázky (pod IČO Commarecu)."""
     return q.filter(db.or_(Firma.ico.is_(None), Firma.ico != COMPANY_ICO))
@@ -442,21 +473,12 @@ def pm_detail(jmeno):
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
     zakazky.sort(key=lambda z: -z._plan)
 
-    # Měsíční stacked (fakturováno + potenciál)
-    fin_fakt, fin_pot = [], []
-    for m in range(1, now.month + 1):
-        ym, key = (now.year, m), f"{now.year}-{m:02d}"
-        plan_m = sum(_plan_mesic(z, ym) for z in zakazky)
-        fakt_m = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in zakazky)
-        fakt_m += sum(f.castka for z in zakazky for f in z.faktury
-                      if f.datum and f.datum.strftime("%Y-%m") == key)
-        fin_fakt.append(round(fakt_m))
-        fin_pot.append(round(max(plan_m - fakt_m, 0)))
-    graf = {"labels": [MESICE_ZKR[m] for m in range(1, now.month + 1)], "fakt": fin_fakt, "pot": fin_pot}
+    # Měsíční stacked vč. budoucnosti
+    graf = _fin_serie(zakazky, hod, _okno_mesicu(now), (now.year, now.month))
     kpi = {"zakazek": len(zakazky), "klientu": len({z.firma_id for z in zakazky}),
            "hodin": round(sum(z.hodiny_bill for z in zakazky), 1),
            "plan": sum(z._plan for z in zakazky),
-           "trzby": sum(fin_fakt), "potencial": sum(fin_pot)}
+           "trzby": sum(graf["fakt"]), "potencial": sum(graf["pot"])}
     return render_template("pm_detail.html", jmeno=jmeno, zakazky=zakazky, graf=graf,
                            kpi=kpi, rok=now.year, updated=updated)
 
@@ -621,21 +643,11 @@ def firma_detail(id):
     uzivatele = snapshot.uzivatele_zkr(snap, aktivni_zkr)
     pm_jmena = {z.projektovy_manazer.strip() for z in aktivni if z.projektovy_manazer}
 
-    # Finanční stacked graf: fakturováno + nenaplněný potenciál = plán (po měsících)
-    fin_fakt, fin_pot = [], []
-    for m in range(1, now.month + 1):
-        ym, key = (now.year, m), f"{now.year}-{m:02d}"
-        plan_m = sum(_plan_mesic(z, ym) for z in aktivni)
-        fakt_m = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in aktivni)
-        fakt_m += sum(f.castka for z in aktivni for f in z.faktury
-                      if f.datum and f.datum.strftime("%Y-%m") == key)
-        fin_fakt.append(round(fakt_m))
-        fin_pot.append(round(max(plan_m - fakt_m, 0)))
-    graf_fin = {"labels": [MESICE_CZ[m][:3] for m in range(1, now.month + 1)],
-                "fakt": fin_fakt, "pot": fin_pot}
-    # KPI sladit s grafem (potenciál po měsících, ne ročně sečtený)
-    kpi["trzby"] = sum(fin_fakt)
-    kpi["potencial"] = sum(fin_pot)
+    # Finanční stacked graf vč. budoucnosti (fakturováno + potenciál + budoucí plán)
+    graf_fin = _fin_serie(aktivni, hod, _okno_mesicu(now), (now.year, now.month))
+    # KPI sladit s grafem (minulý potenciál po měsících)
+    kpi["trzby"] = sum(graf_fin["fakt"])
+    kpi["potencial"] = sum(graf_fin["pot"])
     return render_template("firma_detail.html", firma=firma, graf=graf, graf_fin=graf_fin, kpi=kpi,
                            rok=now.year, uzivatele=uzivatele, pm_jmena=pm_jmena, updated=updated)
 
