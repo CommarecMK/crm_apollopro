@@ -2,11 +2,14 @@
 {% block content %}
 
 <p style="margin-bottom:6px"><a href="{{ url_for('main.firmy') }}">← Firmy</a></p>
-<h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
-  {{ firma.nazev }}
-  {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
-  {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
-</h1>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <h1 style="color:var(--navy);font-size:28px;margin-bottom:4px">
+    {{ firma.nazev }}
+    {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
+    {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
+  </h1>
+  {% if pm_jmena %}<div style="color:var(--cyan);font-weight:700;font-size:16px">PM: {{ pm_jmena|join(", ") }}</div>{% endif %}
+</div>
 <p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
   {% if not firma.aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní klient</span>{% endif %}</p>
 
@@ -16,7 +19,7 @@
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
   {% if kpi.rozpocet_h %}<div class="stat"><div class="num">{{ kpi.rozpocet_h }}</div><div class="lbl">Rozpočet h dle smlouvy</div></div>{% endif %}
   <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
-  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenapln. potenciál Kč</div></div>
+  <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenapln. potenciál Kč</div></div>
 </div>
 
 <!-- Graf po měsících -->

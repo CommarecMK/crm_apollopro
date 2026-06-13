@@ -20,7 +20,7 @@
   <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
   <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ souhrn.interni_hodin }}</div><div class="lbl">Interní hodiny</div></div>
   <div class="stat"><div class="num">{{ "{:,.0f}".format(souhrn.trzby_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržby (Kč, období)</div></div>
-  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(souhrn.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál (Kč)</div></div>
+  <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(souhrn.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál (Kč)</div></div>
 </div>
 
 <form class="filters" method="get">
@@ -76,7 +76,7 @@
       <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
       <td style="text-align:right">{{ z.rozpocet_hodin_efekt or '—' }}</td>
       <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
-      <td style="text-align:right;color:var(--orange)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>
+      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}

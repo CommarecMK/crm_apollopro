@@ -1,8 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Přehled</h1>
-<p class="muted" style="margin-bottom:18px">Celá firma · rok {{ rok }} (do dneška)</p>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+  <div>
+    <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Přehled</h1>
+    <p class="muted" style="margin-bottom:18px">Celá firma · rok {{ rok }} (do dneška)
+      {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% else %}· <b>data zatím nenačtena</b>{% endif %}</p>
+  </div>
+  <form method="post" action="{{ url_for('main.obnovit') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-ghost" type="submit">↻ Obnovit z Clockify</button>
+  </form>
+</div>
 
 {% if not kpi.clockify_ok %}
 <div class="note"><b>Clockify nenapojený</b> — hodiny a tržby se zobrazí jako 0.</div>
@@ -11,7 +20,7 @@
 <div class="stats">
   <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakturovatelné hodiny</div></div>
-  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
+  <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
   <div class="stat"><div class="num">{{ kpi.zakazek }}</div><div class="lbl">Aktivních zakázek</div></div>
   <div class="stat"><div class="num">{{ kpi.klientu }}</div><div class="lbl">Aktivních klientů</div></div>
 </div>

@@ -47,6 +47,14 @@ class Kontakt(db.Model):
     firma     = db.relationship("Firma", back_populates="kontakty", lazy="joined")
 
 
+class Snapshot(db.Model):
+    """Denní snímek dat z Clockify (JSON). Stránky čtou odtud → rychlé načítání."""
+    __tablename__ = "snapshot"
+    id      = db.Column(db.Integer, primary_key=True)
+    updated = db.Column(db.String(40))
+    data    = db.Column(db.Text)
+
+
 class Zakazka(db.Model):
     __tablename__ = "zakazka"
     id          = db.Column(db.Integer, primary_key=True)

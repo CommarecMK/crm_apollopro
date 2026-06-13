@@ -12,3 +12,4 @@ COMPANY_ICO           = os.environ.get("COMPANY_ICO", "21836256")  # Commarec s.
 CLOCKIFY_API_KEY      = os.environ.get("CLOCKIFY_API_KEY", "")
 CLOCKIFY_WORKSPACE_ID = os.environ.get("CLOCKIFY_WORKSPACE_ID", "")
 ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
+CRON_KEY              = os.environ.get("CRON_KEY", "")  # token pro denní obnovu snapshotu
