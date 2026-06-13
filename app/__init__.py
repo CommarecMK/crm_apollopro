@@ -75,6 +75,7 @@ def _inline_migrace():
         tabulky = insp.get_table_names()
         plan = {
             "firma": {
+                "typ_subjektu": "VARCHAR(20) DEFAULT 'klient'",
                 "ico": "VARCHAR(20)", "dic": "VARCHAR(20)", "adresa": "VARCHAR(300)",
                 "web": "VARCHAR(200)", "obor": "VARCHAR(200)", "zamestnanci": "VARCHAR(80)",
                 "obrat": "VARCHAR(80)", "merk_nacteno": "VARCHAR(40)",

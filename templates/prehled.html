@@ -19,6 +19,20 @@
 <div class="note"><b>Clockify nenapojený</b> — hodiny a tržby se zobrazí jako 0.</div>
 {% endif %}
 
+{% if alerty %}
+<div class="stat" style="margin-bottom:20px;border-left:4px solid var(--orange)">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">⚠ Vyžaduje pozornost ({{ alerty|length }})</h3>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    {% for a in alerty %}
+    <a href="{{ url_for('main.firma_detail', id=a.firma_id) }}" style="display:flex;align-items:center;gap:10px;color:var(--text);font-size:14px;padding:4px 0;border-bottom:1px solid var(--n8)">
+      <span class="dot {{ a.barva }}"></span>
+      <b>{{ a.zakazka }}</b> <span class="muted">— {{ a.popis }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="stats">
   {% if vidi_finance() %}<div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>{% endif %}
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakturovatelné hodiny</div></div>

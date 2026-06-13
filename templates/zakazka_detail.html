@@ -42,7 +42,7 @@
         <td style="text-align:right">{{ celkem }}</td>
         <td style="text-align:center">
           {% if jmeno == z.projektovy_manazer %}✓
-          {% elif smi_zakazky() %}
+          {% else %}
           <form method="post" action="{{ url_for('main.zakazka_pm', id=z.id) }}" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="jmeno" value="{{ jmeno }}">

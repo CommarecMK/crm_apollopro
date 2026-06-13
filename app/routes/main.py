@@ -186,8 +186,31 @@ def prehled():
 
     graf = {"labels": [MESICE_CZ[int(mm[5:7])][:3] for mm in mesice_rok],
             "bill": bill_mesic, "trzby": trzby_mesic}
+
+    # ── Alerty: co vyžaduje pozornost (bez financí, viditelné všem) ──
+    today = now.date()
+    posl2 = mesice_rok[-2:]  # poslední dva měsíce
+    alerty = []
+    for z in zakazky:
+        # 1) blíží se konec zakázky
+        if z.datum_do and 0 <= (z.datum_do - today).days <= 30:
+            alerty.append({"barva": "oranzova", "firma_id": z.firma_id, "zakazka": z.nazev,
+                           "popis": f"Blíží se konec: {z.datum_do.strftime('%-d. %-m. %Y')}"})
+        # 2) přečerpané hodiny vs rozpočet
+        rozp = z.rozpocet_hodin_efekt
+        if rozp and z.hodiny_bill >= rozp:
+            alerty.append({"barva": "cervena", "firma_id": z.firma_id, "zakazka": z.nazev,
+                           "popis": f"Přečerpané hodiny ({round(z.hodiny_bill)} / {round(rozp)} h)"})
+        # 3) dlouho bez aktivity (poslední 2 měsíce 0 h)
+        akt = sum(hod.get(z.zkratka, {}).get(mm, [0, 0])[0] for mm in posl2)
+        if akt == 0:
+            alerty.append({"barva": "neutral", "firma_id": z.firma_id, "zakazka": z.nazev,
+                           "popis": "Žádná aktivita poslední 2 měsíce"})
+    poradi = {"cervena": 0, "oranzova": 1, "neutral": 2}
+    alerty.sort(key=lambda a: poradi.get(a["barva"], 3))
+
     return render_template("prehled.html", kpi=kpi, graf=graf, rozpad=rozpad,
-                           top_klienti=top_klienti, rok=now.year, updated=updated)
+                           top_klienti=top_klienti, rok=now.year, updated=updated, alerty=alerty)
 
 
 @bp.route("/zakazky")
@@ -271,11 +294,53 @@ def dashboard():
 @login_required
 def firmy():
     hledat = request.args.get("q", "").strip()
+    f_typ = request.args.get("typ_subjektu", "")
     q = Firma.query
     if hledat:
         q = q.filter(db.or_(Firma.nazev.ilike(f"%{hledat}%"), Firma.ico.ilike(f"%{hledat}%")))
+    if f_typ:
+        q = q.filter(Firma.typ_subjektu == f_typ)
     seznam = q.order_by(Firma.nazev).all()
-    return render_template("firmy.html", firmy=seznam, hledat=hledat)
+    return render_template("firmy.html", firmy=seznam, hledat=hledat, f_typ=f_typ)
+
+
+@bp.route("/firmy/nova", methods=["POST"])
+@klient_required
+def firma_nova():
+    nazev = request.form.get("nazev", "").strip()
+    if not nazev:
+        flash("Vyplň název firmy.", "error")
+        return redirect(url_for("main.firmy"))
+    if Firma.query.filter_by(nazev=nazev).first():
+        flash("Firma s tímto názvem už existuje.", "error")
+        return redirect(url_for("main.firmy"))
+    f = Firma(nazev=nazev, ico=request.form.get("ico", "").strip() or None,
+              typ_subjektu=request.form.get("typ_subjektu", "klient"))
+    db.session.add(f)
+    db.session.commit()
+    flash("Firma přidána. Načti data z MERK na jejím detailu.", "info")
+    return redirect(url_for("main.firma_detail", id=f.id))
+
+
+@bp.route("/firmy/<int:id>/zakazka/nova", methods=["POST"])
+@zakazky_required
+def zakazka_nova(id):
+    firma = Firma.query.get_or_404(id)
+    nazev = request.form.get("nazev", "").strip()
+    typ_sluzby = request.form.get("typ_sluzby", "").strip()
+    if not nazev:
+        flash("Vyplň název zakázky.", "error")
+        return redirect(url_for("main.firma_detail", id=id))
+    # zkratka = IČO_pořadí (další volné číslo)
+    ico = firma.ico or "0"
+    cisla = [int(z.zkratka.split("_")[1]) for z in firma.zakazky
+             if "_" in z.zkratka and z.zkratka.split("_")[1].isdigit()]
+    poradi = (max(cisla) + 1) if cisla else 1
+    db.session.add(Zakazka(zkratka=f"{ico}_{poradi}", nazev=nazev, typ_sluzby=typ_sluzby,
+                           firma_id=id, aktivni=True, typ_rozpoctu="projektovy"))
+    db.session.commit()
+    flash("Zakázka přidána.", "info")
+    return redirect(url_for("main.firma_detail", id=id))
 
 
 @bp.route("/firmy/<int:id>")
@@ -440,7 +505,7 @@ def zakazka_detail(id):
 
 
 @bp.route("/zakazka/<int:id>/pm", methods=["POST"])
-@zakazky_required
+@login_required
 def zakazka_pm(id):
     z = Zakazka.query.get_or_404(id)
     z.projektovy_manazer = request.form.get("jmeno", "").strip() or None
@@ -460,7 +525,6 @@ def zakazka_upravit(id):
                 return float(v) if v else None
             except ValueError:
                 return None
-        z.projektovy_manazer = request.form.get("projektovy_manazer", "").strip() or None
         typ = request.form.get("typ_rozpoctu", z.typ_rozpoctu)
         z.typ_rozpoctu = typ
         z.hodinova_sazba = _num("hodinova_sazba")

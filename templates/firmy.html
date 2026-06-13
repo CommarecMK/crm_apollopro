@@ -5,19 +5,25 @@
 
 <form class="filters" method="get">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo IČO…">
-  <button class="btn" type="submit">Hledat</button>
+  <select name="typ_subjektu">
+    <option value="">Klienti i dodavatelé</option>
+    <option value="klient" {{ 'selected' if f_typ=='klient' }}>Jen klienti</option>
+    <option value="dodavatel" {{ 'selected' if f_typ=='dodavatel' }}>Jen dodavatelé</option>
+  </select>
+  <button class="btn" type="submit">Filtrovat</button>
   <a class="btn btn-ghost" href="{{ url_for('main.firmy') }}">Zrušit</a>
 </form>
 
 <table>
   <thead>
-    <tr><th>Firma</th><th>IČO</th><th>Obor</th><th>Zakázek</th><th>Kontaktů</th><th>Doplněno</th></tr>
+    <tr><th>Firma</th><th>Typ</th><th>IČO</th><th>Obor</th><th>Zakázek</th><th>Kontaktů</th><th>Doplněno</th></tr>
   </thead>
   <tbody>
     {% for f in firmy %}
     <tr>
       <td><a href="{{ url_for('main.firma_detail', id=f.id) }}"><b>{{ f.nazev }}</b></a>
         {% if f.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}</td>
+      <td><span class="tag" style="{{ 'background:var(--orange);color:#fff' if f.typ_subjektu=='dodavatel' }}">{{ 'Dodavatel' if f.typ_subjektu=='dodavatel' else 'Klient' }}</span></td>
       <td class="code">{{ f.ico or '—' }}</td>
       <td>{{ f.obor or '—' }}</td>
       <td>{{ f.zakazky|length }}</td>
@@ -25,8 +31,23 @@
       <td class="muted" style="font-size:12px">{{ f.merk_nacteno or '—' }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="muted" style="text-align:center;padding:30px">Žádné firmy.</td></tr>
+    <tr><td colspan="7" class="muted" style="text-align:center;padding:30px">Žádné firmy.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% if smi_klient() %}
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Přidat firmu</h2>
+<form method="post" action="{{ url_for('main.firma_nova') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fff;padding:16px;border-radius:12px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+  <input type="text" name="nazev" placeholder="Název firmy" required style="{{ istyl }}">
+  <input type="text" name="ico" placeholder="IČO (kvůli MERK)" style="{{ istyl }}">
+  <select name="typ_subjektu" style="{{ istyl }}">
+    <option value="klient">Klient</option>
+    <option value="dodavatel">Dodavatel</option>
+  </select>
+  <button class="btn" type="submit">+ Přidat firmu</button>
+</form>
+{% endif %}
 {% endblock %}

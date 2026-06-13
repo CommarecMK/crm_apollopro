@@ -10,7 +10,9 @@
   </h1>
   {% if pm_jmena %}<div style="color:var(--cyan);font-weight:700;font-size:16px">PM: {{ pm_jmena|join(", ") }}</div>{% endif %}
 </div>
-<p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
+<p class="muted" style="margin-bottom:18px">
+  <span class="tag" style="{{ 'background:var(--orange);color:#fff' if firma.typ_subjektu=='dodavatel' }}">{{ 'Dodavatel' if firma.typ_subjektu=='dodavatel' else 'Klient' }}</span>
+  · IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
   {% if not firma.aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní klient</span>{% endif %}</p>
 
 <!-- KPI klienta (rok) -->
@@ -118,6 +120,16 @@
         {% endfor %}
       </tbody>
     </table>
+
+    {% if smi_zakazky() %}
+    <form method="post" action="{{ url_for('main.zakazka_nova', id=firma.id) }}"
+          style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="nazev" placeholder="Název zakázky (např. Interim)" required style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <input type="text" name="typ_sluzby" placeholder="Typ služby" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
+      <button class="btn" type="submit">+ Přidat zakázku</button>
+    </form>
+    {% endif %}
 
     <!-- Hodiny podle zaměstnanců (celý klient) -->
     <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Hodiny podle zaměstnanců — {{ rok }}</h2>

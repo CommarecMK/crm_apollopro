@@ -12,6 +12,7 @@ class Firma(db.Model):
     __tablename__ = "firma"
     id      = db.Column(db.Integer, primary_key=True)
     nazev   = db.Column(db.String(200), nullable=False, unique=True)
+    typ_subjektu = db.Column(db.String(20), default="klient")  # klient | dodavatel
     # Obohacení z MERK / ARES (podle IČO)
     ico          = db.Column(db.String(20), index=True)
     dic          = db.Column(db.String(20))
