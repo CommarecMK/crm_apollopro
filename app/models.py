@@ -126,31 +126,48 @@ class Zakazka(db.Model):
 
     @property
     def rozpocet_hodin_efekt(self):
-        """Rozpočet hodin za zvolené období (měsíční × počet měsíců, projektový napevno)."""
+        """Rozpočet hodin za zvolené období. Měsíční × počet měsíců; u projektového
+        buď zadaný rozpočet hodin, nebo dopočet z pevné částky ÷ hodinová sazba."""
         if self.typ_rozpoctu == "mesicni":
             return (self.rozpocet_hodin_mesic or 0) * self._mesicu if self.rozpocet_hodin_mesic else None
-        return self.rozpocet_hodin
+        if self.rozpocet_hodin:
+            return self.rozpocet_hodin
+        if self.budget_castka and self.hodinova_sazba:
+            return round(self.budget_castka / self.hodinova_sazba, 1)
+        return None
+
+    @property
+    def efekt_sazba(self):
+        """Efektivní sazba Kč/h. Když není zadaná hodinová sazba, ale u projektového je
+        pevná částka + odhad hodin, dopočítá se jako částka ÷ rozpočet hodin (odkrajuje z částky)."""
+        if self.hodinova_sazba:
+            return self.hodinova_sazba
+        if self.typ_rozpoctu == "projektovy" and self.budget_castka and self.rozpocet_hodin:
+            return self.budget_castka / self.rozpocet_hodin
+        return 0
 
     @property
     def trzba_plan(self):
-        """Plánovaná tržba za zvolené období. Měsíční × počet měsíců, jinak celková."""
-        s = self.hodinova_sazba or 0
+        """Plánovaná tržba za zvolené období. Měsíční × počet měsíců, jinak celková (fond)."""
         if self.typ_rozpoctu == "mesicni":
-            return (self.rozpocet_hodin_mesic or 0) * self._mesicu * s
+            return (self.rozpocet_hodin_mesic or 0) * self._mesicu * (self.hodinova_sazba or 0)
         if self.typ_rozpoctu == "analyza":
             return self.budget_castka or 0
-        return self.budget_castka if self.budget_castka else (self.rozpocet_hodin or 0) * s
+        return self.budget_castka if self.budget_castka else (self.rozpocet_hodin or 0) * (self.hodinova_sazba or 0)
 
     @property
     def trzba_skutecnost(self):
-        """Skutečná tržba = FAKTUROVATELNÉ hodiny × sazba. U analýzy dle milníků 40/60.
-        Hodiny doplňuje Clockify za zvolené období."""
-        hod_bill = getattr(self, "hodiny_bill", 0) or 0
-        s = self.hodinova_sazba or 0
+        """Skutečná (vyčerpaná) tržba = FAKTUROVATELNÉ hodiny × efektivní sazba.
+        U projektového s pevnou částkou se odkrajuje z částky (max do její výše).
+        U analýzy dle milníků 40/60."""
         if self.typ_rozpoctu == "analyza":
             c = self.budget_castka or 0
             return (0.4 if self.analyza_zaloha else 0) * c + (0.6 if self.analyza_odevzdano else 0) * c
-        return hod_bill * s
+        hod_bill = getattr(self, "hodiny_bill", 0) or 0
+        t = hod_bill * self.efekt_sazba
+        if self.typ_rozpoctu == "projektovy" and self.budget_castka:
+            return min(t, self.budget_castka)   # nepřekročí pevnou částku
+        return t
 
     @property
     def nenaplneny_potencial(self):

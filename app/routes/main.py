@@ -153,7 +153,7 @@ def prehled():
     zakazky = (Zakazka.query.join(Firma)
                .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True)).all())
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
-    sazby = {z.zkratka: (z.hodinova_sazba or 0) for z in zakazky}
+    sazby = {z.zkratka: z.efekt_sazba for z in zakazky}
 
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_zkr(snap, z.zkratka, mesice_rok)
@@ -498,7 +498,7 @@ def zakazka_detail(id):
         "celkem": celkem,
         "bill": bill,
         "rozpocet": [_rozp_mesic(m) for m in mesice],
-        "trzba": [round(b * (z.hodinova_sazba or 0)) for b in bill],
+        "trzba": [round(b * z.efekt_sazba) for b in bill],
     }
     return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year,
                            uzivatele=uzivatele, updated=updated)
