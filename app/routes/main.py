@@ -88,6 +88,14 @@ def diagnostika_clockify():
     return jsonify(clockify.diagnostika(od, do))
 
 
+@bp.route("/diagnostika/merk")
+@login_required
+def diagnostika_merk():
+    """Test MERK napojení. Použij ?ico=...&nazev=... pro konkrétní test."""
+    return jsonify(firmy_service.merk_diagnostika(
+        request.args.get("ico", ""), request.args.get("nazev", "")))
+
+
 def _vyhodnot_riziko(z):
     """Vrátí (stav_indikatoru, popis). Bez rozpočtu zatím neutrální."""
     if not z.rozpocet_hodin:
