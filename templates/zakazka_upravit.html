@@ -58,6 +58,14 @@
     </label>
   </div>
 
+  <!-- Jednorázová fakturace -->
+  <div class="blok blok-jednorazovy">
+    <p class="muted" style="font-size:13px;margin-bottom:14px">
+      Nárazový prodej — žádné sazby ani rozpočet hodin. <b>Jednotlivé faktury (částky) zadáváš na detailu zakázky.</b>
+      Hodiny z Clockify jsou jen náklad.
+    </p>
+  </div>
+
   <div style="display:flex;gap:12px;margin-bottom:14px">
     <label style="flex:1"><span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Od</span>
       <input type="date" name="datum_od" value="{{ z.datum_od.isoformat() if z.datum_od else '' }}" style="{{ istyl }}"></label>
@@ -77,7 +85,7 @@ function prepni(){
   var t=document.getElementById('typ').value;
   document.querySelectorAll('.blok').forEach(function(b){b.style.display='none';});
   var el=document.querySelector('.blok-'+t); if(el) el.style.display='block';
-  document.querySelector('.pole-sazba').style.display = (t==='analyza')?'none':'block';
+  document.querySelector('.pole-sazba').style.display = (t==='analyza'||t==='jednorazovy')?'none':'block';
 }
 prepni();
 </script>
