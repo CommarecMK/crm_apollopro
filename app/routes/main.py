@@ -19,7 +19,8 @@ def _bez_internich(q):
 
 def _jen_interni(q):
     return q.filter(Firma.ico == COMPANY_ICO)
-from ..auth import login_required, klient_required, zakazky_required, admin_required
+from ..auth import (login_required, klient_required, zakazky_required,
+                    admin_required, finance_required)
 from ..services import clockify, firmy as firmy_service, snapshot
 
 bp = Blueprint("main", __name__)
@@ -323,6 +324,93 @@ def interni():
     zakazky.sort(key=lambda z: -z.hodiny)
     return render_template("interni.html", zakazky=zakazky, graf=graf, uzivatele=uzivatele,
                            celkem=celkem, rok=now.year, updated=updated)
+
+
+@bp.route("/pm")
+@finance_required
+def pm_prehled():
+    """Přehled podle projektových manažerů — kdo co táhne (hodiny, fakturováno, potenciál)."""
+    now = datetime.now(timezone.utc)
+    snap, updated = snapshot.nacti()
+    mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
+    zakazky = _bez_internich(Zakazka.query.join(Firma)
+              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+    pm = {}
+    for z in zakazky:
+        _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
+        z.hodiny = z.hodiny_bill
+        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
+                              if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        key = (z.projektovy_manazer or "").strip() or "— bez PM —"
+        d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0})
+        d["zakazek"] += 1
+        d["hodin"] += z.hodiny_bill
+        d["trzby"] += z.trzba_skutecnost
+        d["potencial"] += z.nenaplneny_potencial
+    radky = sorted(pm.values(), key=lambda x: -x["trzby"])
+    for r in radky:
+        r["hodin"] = round(r["hodin"], 1)
+        r["trzby"] = round(r["trzby"])
+        r["potencial"] = round(r["potencial"])
+    graf = {"labels": [r["pm"] for r in radky],
+            "trzby": [r["trzby"] for r in radky],
+            "potencial": [r["potencial"] for r in radky]}
+    return render_template("pm.html", radky=radky, graf=graf, rok=now.year, updated=updated)
+
+
+@bp.route("/cashflow")
+@finance_required
+def cashflow():
+    """Odhad cashflow — plánovaná fakturace rozložená do měsíců (výhled 12 měsíců)."""
+    now = datetime.now(timezone.utc)
+    zakazky = _bez_internich(Zakazka.query.join(Firma)
+              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
+
+    # Horizont: 12 měsíců od aktuálního
+    horizon, r, m = [], now.year, now.month
+    for _ in range(12):
+        horizon.append((r, m))
+        m += 1
+        if m == 13:
+            m, r = 1, r + 1
+
+    def _mesicu_mezi(od, do):
+        return (do.year - od.year) * 12 + (do.month - od.month) + 1
+
+    def _plan(z, ym):
+        if z.datum_od and ym < (z.datum_od.year, z.datum_od.month):
+            return 0
+        if z.datum_do and ym > (z.datum_do.year, z.datum_do.month):
+            return 0
+        if z.typ_rozpoctu == "mesicni":
+            return (z.rozpocet_hodin_mesic or 0) * (z.hodinova_sazba or 0)
+        if z.typ_rozpoctu == "analyza":
+            c = z.budget_castka or 0
+            if z.datum_od and ym == (z.datum_od.year, z.datum_od.month):
+                return 0.4 * c
+            if z.datum_do and ym == (z.datum_do.year, z.datum_do.month):
+                return 0.6 * c
+            return 0
+        # projektový — rovnoměrně přes dobu trvání
+        total = z.budget_castka or (z.rozpocet_hodin or 0) * (z.hodinova_sazba or 0)
+        if total and z.datum_od and z.datum_do:
+            n = _mesicu_mezi(z.datum_od, z.datum_do)
+            return total / n if n > 0 else 0
+        return 0
+
+    sumy = [0] * 12
+    bez_terminu = []
+    for z in zakazky:
+        if z.typ_rozpoctu in ("projektovy", "analyza") and (z.budget_castka or z.rozpocet_hodin) and not (z.datum_od and z.datum_do):
+            bez_terminu.append(z.nazev)
+        for i, ym in enumerate(horizon):
+            sumy[i] += _plan(z, ym)
+
+    radky = [{"label": f"{MESICE_CZ[mm]} {rr}", "castka": round(s)} for (rr, mm), s in zip(horizon, sumy)]
+    graf = {"labels": [f"{MESICE_CZ[mm][:3]} {str(rr)[2:]}" for rr, mm in horizon],
+            "castky": [round(s) for s in sumy]}
+    return render_template("cashflow.html", radky=radky, graf=graf,
+                           celkem=round(sum(sumy)), bez_terminu=bez_terminu)
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────

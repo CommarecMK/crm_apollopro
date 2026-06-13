@@ -50,6 +50,17 @@ def zakazky_required(f):
     return d
 
 
+def finance_required(f):
+    @wraps(f)
+    def d(*a, **k):
+        if not session.get("user_id"):
+            return redirect(url_for("main.login"))
+        if _r() not in ROLE_FINANCE:
+            return abort(403)
+        return f(*a, **k)
+    return d
+
+
 def admin_required(f):
     @wraps(f)
     def d(*a, **k):

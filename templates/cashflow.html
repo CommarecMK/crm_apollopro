@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Cashflow — výhled</h1>
+<p class="muted" style="margin-bottom:18px">Odhad plánované fakturace na 12 měsíců dopředu</p>
+
+<div class="stats">
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(celkem).replace(",", " ") }}</div><div class="lbl">Výhled fakturace 12 měsíců (Kč)</div></div>
+</div>
+
+<div class="stat" style="margin-bottom:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Předpokládaná fakturace po měsících</h3>
+  <canvas id="grafCf" height="90"></canvas>
+</div>
+
+<table>
+  <thead><tr><th>Měsíc</th><th style="text-align:right">Předpokládaná fakturace (Kč)</th></tr></thead>
+  <tbody>
+    {% for r in radky %}
+    <tr><td>{{ r.label }}</td><td style="text-align:right"><b>{{ "{:,.0f}".format(r.castka).replace(",", " ") }}</b></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if bez_terminu %}
+<div class="note" style="margin-top:16px">
+  <b>Bez termínů (nezahrnuto do výhledu):</b> {{ bez_terminu|join(", ") }}.
+  Doplň u nich datum od/do, ať se rozloží do cashflow.
+</div>
+{% endif %}
+
+<p class="muted" style="font-size:12px;margin-top:14px">
+  Odhad: měsíční zakázky = hodiny/měsíc × sazba · projektové = částka rovnoměrně přes dobu trvání ·
+  analýzy = 40 % na začátku, 60 % při odevzdání. První verze — doladíme dle reality.
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const CF = {{ graf|tojson }};
+if (document.getElementById('grafCf')) new Chart(document.getElementById('grafCf'), {
+  type:'bar',
+  data:{labels:CF.labels, datasets:[{label:'Fakturace (Kč)', data:CF.castky, backgroundColor:'#173767'}]},
+  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}
+});
+</script>
+{% endblock %}
