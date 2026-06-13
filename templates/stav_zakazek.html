@@ -25,14 +25,17 @@
 
 <form class="filters" method="get">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat název nebo zkratku…">
-  <select name="mesic">
-    <option value="">Celý rok</option>
-    {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val==mesic }}>{{ popis }}</option>{% endfor %}
-  </select>
-  <select name="typ">
-    <option value="">Všechny typy služeb</option>
-    {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t==f_typ }}>{{ t }}</option>{% endfor %}
-  </select>
+  <label style="display:flex;flex-direction:column;font-size:11px;color:#667">Měsíce (Ctrl/⌘ = více)
+    <select name="mesic" multiple size="5" style="min-width:150px">
+      <option value="vse" {{ 'selected' if 'vse' in f_mesice }}>Celý rok</option>
+      {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val in f_mesice }}>{{ popis }}</option>{% endfor %}
+    </select>
+  </label>
+  <label style="display:flex;flex-direction:column;font-size:11px;color:#667">Typ služby (více)
+    <select name="typ" multiple size="5" style="min-width:150px">
+      {% for t in typy %}<option value="{{ t }}" {{ 'selected' if t in f_typy }}>{{ t }}</option>{% endfor %}
+    </select>
+  </label>
   <select name="aktivita">
     {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
       <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>

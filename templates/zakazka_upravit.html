@@ -10,6 +10,11 @@
   <input type="hidden" name="zpet" value="{{ url_for('main.firma_detail', id=z.firma_id) }}">
 
   <label style="display:block;margin-bottom:14px">
+    <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Projektový manažer</span>
+    <input type="text" name="projektovy_manazer" value="{{ z.projektovy_manazer or '' }}" placeholder="jméno PM" style="{{ istyl }}">
+  </label>
+
+  <label style="display:block;margin-bottom:14px">
     <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Typ rozpočtu</span>
     <select name="typ_rozpoctu" id="typ" onchange="prepni()" style="{{ istyl }}">
       <option value="mesicni" {{ 'selected' if z.typ_rozpoctu=='mesicni' }}>Měsíční (hodiny/měsíc × sazba)</option>

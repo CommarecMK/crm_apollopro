@@ -62,6 +62,7 @@ def _inline_migrace():
             },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",
+                "projektovy_manazer": "VARCHAR(120)",
                 "typ_rozpoctu": "VARCHAR(20) DEFAULT 'projektovy'",
                 "hodinova_sazba": "FLOAT",
                 "rozpocet_hodin_mesic": "FLOAT",

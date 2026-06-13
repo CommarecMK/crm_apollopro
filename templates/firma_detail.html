@@ -7,7 +7,22 @@
   {% if firma.rucne_upraveno %}<span title="Ručně upraveno" style="color:var(--cyan-dark);font-size:20px">✎</span>{% endif %}
   {% if firma.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
 </h1>
-<p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}</p>
+<p class="muted" style="margin-bottom:18px">IČO {{ firma.ico or '—' }}{% if firma.dic %} · DIČ {{ firma.dic }}{% endif %}
+  {% if not firma.aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní klient</span>{% endif %}</p>
+
+<!-- KPI klienta (rok) -->
+<div class="stats">
+  <div class="stat"><div class="num">{{ kpi.pocet }}</div><div class="lbl">Zakázek</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenapln. potenciál Kč</div></div>
+</div>
+
+<!-- Graf po měsících -->
+<div class="stat" style="margin-bottom:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny po měsících — {{ rok }}</h3>
+  <canvas id="grafFirma" height="90"></canvas>
+</div>
 
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
   <div>
@@ -66,12 +81,14 @@
     <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
     {% if not firma.aktivni %}<p class="muted" style="font-size:12px;margin-bottom:8px">Klient je neaktivní → všechny jeho zakázky jsou neaktivní.</p>{% endif %}
     <table>
-      <thead><tr><th>Zakázka</th><th>Typ</th><th style="text-align:center">Aktivní</th></tr></thead>
+      <thead><tr><th>Zakázka</th><th>Typ</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Tržba Kč</th><th style="text-align:center">Aktivní</th></tr></thead>
       <tbody>
         {% for z in firma.zakazky %}
         <tr>
           <td><a href="{{ url_for('main.zakazka_detail', id=z.id) }}">{{ z.nazev }}</a> <span class="code">{{ z.zkratka }}</span></td>
           <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
+          <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
+          <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
           <td style="text-align:center">
             <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -84,7 +101,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
+        <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Žádné zakázky.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -122,4 +139,29 @@
   </div>
   </div>
 </div>
+
+<!-- Připravované sekce -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:8px">
+  {% for nazev, popis in [('Freelo úkoly','Úkoly a stav z Freelo'),('Zápisy','Poznámky z jednání'),('Aktuality','Co se u klienta děje')] %}
+  <div class="stat" style="opacity:.7">
+    <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
+    <p class="muted" style="font-size:12px">{{ popis }} — <b>Připravujeme</b></p>
+  </div>
+  {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const GF = {{ graf|tojson }};
+if (document.getElementById('grafFirma') && GF.labels.length){
+  new Chart(document.getElementById('grafFirma'), {
+    type:'bar',
+    data:{labels:GF.labels, datasets:[
+      {label:'Fakturovatelné h', data:GF.bill, backgroundColor:'#34C759'},
+      {label:'Celkem h', data:GF.celkem, backgroundColor:'#BAC3D2'}
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}}}
+  });
+}
+</script>
 {% endblock %}

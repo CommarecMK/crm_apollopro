@@ -121,6 +121,152 @@ def obohat_zakazky(zakazky, datum_od, datum_do):
     return zakazky
 
 
+def hodiny_dle_zkratky_obdobi(periods):
+    """periods = list (od, do). Sečte hodiny přes všechna období → {zkr:{celkem,bill,nonbill}}."""
+    if not je_nakonfigurovano() or not periods:
+        return {}
+    try:
+        ws = _workspace_id()
+        id2zkr, name2zkr = {}, {}
+        for k in _seznam(ws, "clients"):
+            zkr = (k.get("note") or "").strip()
+            if zkr:
+                id2zkr[k.get("id")] = zkr
+                name2zkr[_norm(k.get("name"))] = zkr
+
+        def _zkr(cid, cn):
+            return id2zkr.get(cid) or name2zkr.get(_norm(cn))
+
+        res = {}
+        for od, do in periods:
+            for cid, cn, hod in _hodiny_summary(ws, "CLIENT", od, do):
+                zkr = _zkr(cid, cn)
+                if zkr:
+                    res.setdefault(zkr, {"celkem": 0, "bill": 0, "nonbill": 0})["celkem"] += hod
+            for cid, cn, hod in _hodiny_summary(ws, "CLIENT", od, do, billable=True):
+                zkr = _zkr(cid, cn)
+                if zkr and zkr in res:
+                    res[zkr]["bill"] += hod
+        for v in res.values():
+            v["nonbill"] = round(max(v["celkem"] - v["bill"], 0), 1)
+            v["celkem"] = round(v["celkem"], 1)
+            v["bill"] = round(v["bill"], 1)
+        return res
+    except Exception as e:
+        print(f"[clockify] obdobi: {e}")
+        return {}
+
+
+def obohat_zakazky_obdobi(zakazky, periods):
+    """Jako obohat_zakazky, ale přes seznam období (více měsíců)."""
+    mapa = hodiny_dle_zkratky_obdobi(periods)
+    for z in zakazky:
+        v = mapa.get(z.zkratka) or {}
+        z.hodiny = v.get("celkem", 0.0)
+        z.hodiny_bill = v.get("bill", 0.0)
+        z.hodiny_nonbill = v.get("nonbill", 0.0)
+    return zakazky
+
+
+def firma_prehled(zkratky, rok, do_mesic):
+    """Pro kartu klienta: vrátí per-zakázku YTD souhrn + měsíční řadu (součet za klienta).
+    zkratky = set zkratek klienta. Jeden průchod přes měsíce."""
+    prazdny = {"zakazky": {}, "serie": []}
+    if not je_nakonfigurovano() or not zkratky:
+        return prazdny
+    try:
+        import calendar as _cal
+        ws = _workspace_id()
+        id2zkr = {}
+        for k in _seznam(ws, "clients"):
+            zkr = (k.get("note") or "").strip()
+            if zkr in zkratky:
+                id2zkr[k.get("id")] = zkr
+        per = {z: {"celkem": 0, "bill": 0, "nonbill": 0} for z in zkratky}
+        serie = []
+        for m in range(1, do_mesic + 1):
+            posl = _cal.monthrange(rok, m)[1]
+            od = f"{rok}-{m:02d}-01T00:00:00Z"
+            do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
+            mtot = mbill = 0
+            tot_map = {cid: h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do)}
+            bill_map = {cid: h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do, billable=True)}
+            for cid, zkr in id2zkr.items():
+                t = tot_map.get(cid, 0); b = bill_map.get(cid, 0)
+                per[zkr]["celkem"] += t; per[zkr]["bill"] += b
+                mtot += t; mbill += b
+            serie.append((m, round(mtot, 1), round(mbill, 1)))
+        for v in per.values():
+            v["nonbill"] = round(max(v["celkem"] - v["bill"], 0), 1)
+            v["celkem"] = round(v["celkem"], 1); v["bill"] = round(v["bill"], 1)
+        return {"zakazky": per, "serie": serie}
+    except Exception as e:
+        print(f"[clockify] firma_prehled: {e}")
+        return prazdny
+
+
+def hodiny_dle_uzivatelu(zkratka, datum_od, datum_do):
+    """Rozpad hodin po zaměstnancích pro danou zakázku (klienta). [(jmeno, celkem, bill)]."""
+    if not je_nakonfigurovano() or not zkratka:
+        return []
+    try:
+        ws = _workspace_id()
+        ids = [k.get("id") for k in _seznam(ws, "clients")
+               if (k.get("note") or "").strip() == zkratka]
+        if not ids:
+            return []
+
+        def _po_uzivatelich(billable=None):
+            body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
+                    "summaryFilter": {"groups": ["USER"]},
+                    "clients": {"ids": ids, "contains": "CONTAINS", "status": "ALL"}}
+            if billable is not None:
+                body["billable"] = billable
+            r = requests.post(f"{REPORTS}/workspaces/{ws}/reports/summary",
+                              headers=_headers(), json=body, timeout=TIMEOUT)
+            r.raise_for_status()
+            return {g.get("_id"): (g.get("name", ""), round((g.get("duration") or 0) / 3600.0, 1))
+                    for g in r.json().get("groupOne", [])}
+
+        tot, bil = _po_uzivatelich(), _po_uzivatelich(True)
+        out = [(nm, h, bil.get(uid, ("", 0))[1]) for uid, (nm, h) in tot.items()]
+        return sorted(out, key=lambda x: -x[1])
+    except Exception as e:
+        print(f"[clockify] uzivatele: {e}")
+        return []
+
+
+def prehled_vse(rok, do_mesic):
+    """Celofiremní měsíční data: serie (hodiny) + billable hodiny po zkratce a měsíci
+    (pro výpočet tržeb se sazbou z DB)."""
+    prazdny = {"serie": [], "bill_zkr_mesic": {}}
+    if not je_nakonfigurovano():
+        return prazdny
+    try:
+        import calendar as _cal
+        ws = _workspace_id()
+        id2zkr = {k.get("id"): (k.get("note") or "").strip()
+                  for k in _seznam(ws, "clients") if (k.get("note") or "").strip()}
+        serie, bzm = [], {}
+        for m in range(1, do_mesic + 1):
+            posl = _cal.monthrange(rok, m)[1]
+            od = f"{rok}-{m:02d}-01T00:00:00Z"
+            do = f"{rok}-{m:02d}-{posl:02d}T23:59:59Z"
+            tot = sum(h for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do) if id2zkr.get(cid))
+            bil = 0
+            for cid, _, h in _hodiny_summary(ws, "CLIENT", od, do, billable=True):
+                z = id2zkr.get(cid)
+                if z:
+                    bil += h
+                    d = bzm.setdefault(z, {})
+                    d[m] = d.get(m, 0) + h
+            serie.append((m, round(tot, 1), round(bil, 1)))
+        return {"serie": serie, "bill_zkr_mesic": bzm}
+    except Exception as e:
+        print(f"[clockify] prehled_vse: {e}")
+        return prazdny
+
+
 def mesicni_serie(zkratka, rok, do_mesic):
     """Vrátí list (mesic, hodiny_celkem, hodiny_bill) pro leden..do_mesic daného roku.
     Páruje klienta podle zkratky v poli Note."""

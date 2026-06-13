@@ -59,6 +59,7 @@ class Zakazka(db.Model):
     datum_do    = db.Column(db.Date, nullable=True)
 
     # ── Rozpočet / fakturační model ──────────────────────────────
+    projektovy_manazer = db.Column(db.String(120), nullable=True)  # PM zakázky
     typ_rozpoctu   = db.Column(db.String(20), default="projektovy")  # mesicni | projektovy | analyza
     hodinova_sazba = db.Column(db.Float, nullable=True)      # Kč/h
     rozpocet_hodin       = db.Column(db.Float, nullable=True)  # projektový rozpočet hodin

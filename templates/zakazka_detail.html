@@ -8,7 +8,8 @@
       {% if z.je_interni %}<span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}
       {% if not z.je_aktivni %}<span class="tag" style="background:var(--grey);color:#fff">Neaktivní</span>{% endif %}
     </h1>
-    <p class="muted">{{ z.zkratka }} · IČO {{ z.ico }} · typ rozpočtu: <b>{{ z.typ_rozpoctu }}</b></p>
+    <p class="muted">{{ z.zkratka }} · IČO {{ z.ico }} · typ rozpočtu: <b>{{ z.typ_rozpoctu }}</b>
+      · PM: <b>{{ z.projektovy_manazer or '—' }}</b></p>
   </div>
   <a class="btn" href="{{ url_for('main.zakazka_upravit', id=z.id) }}">Upravit ✎</a>
 </div>
@@ -25,6 +26,22 @@
 <div class="stat" style="margin-top:8px">
   <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny a tržby po měsících — {{ rok }}</h3>
   <canvas id="graf" height="110"></canvas>
+</div>
+
+<div class="stat" style="margin-top:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Hodiny podle zaměstnanců — {{ rok }}</h3>
+  <table style="box-shadow:none">
+    <thead><tr><th>Zaměstnanec</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Celkem h</th></tr></thead>
+    <tbody>
+      {% for jmeno, celkem, bill in uzivatele %}
+      <tr><td>{{ jmeno }}</td>
+        <td style="text-align:right;color:var(--green)">{{ bill }}</td>
+        <td style="text-align:right">{{ celkem }}</td></tr>
+      {% else %}
+      <tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Žádné hodiny v Clockify (nebo nenapojeno).</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>

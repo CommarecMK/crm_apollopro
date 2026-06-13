@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Přehled</h1>
+<p class="muted" style="margin-bottom:18px">Celá firma · rok {{ rok }} (do dneška)</p>
+
+{% if not kpi.clockify_ok %}
+<div class="note"><b>Clockify nenapojený</b> — hodiny a tržby se zobrazí jako 0.</div>
+{% endif %}
+
+<div class="stats">
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakturovatelné hodiny</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
+  <div class="stat"><div class="num">{{ kpi.zakazek }}</div><div class="lbl">Aktivních zakázek</div></div>
+  <div class="stat"><div class="num">{{ kpi.klientu }}</div><div class="lbl">Aktivních klientů</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
+  <div class="stat">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Vývoj po měsících — {{ rok }}</h3>
+    <canvas id="grafTrend" height="120"></canvas>
+  </div>
+  <div class="stat">
+    <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Tržby dle typu služby</h3>
+    <canvas id="grafTyp" height="160"></canvas>
+  </div>
+</div>
+
+<div class="stat" style="margin-top:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Top klienti dle tržeb</h3>
+  <table style="box-shadow:none">
+    <thead><tr><th>Klient</th><th style="text-align:right">Tržby Kč (rok)</th></tr></thead>
+    <tbody>
+      {% for nazev, castka in top_klienti %}
+      <tr><td>{{ nazev }}</td><td style="text-align:right"><b>{{ "{:,.0f}".format(castka).replace(",", " ") }}</b></td></tr>
+      {% else %}
+      <tr><td colspan="2" class="muted" style="text-align:center;padding:20px">Zatím žádné tržby.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:12px;margin-top:10px"><a href="{{ url_for('main.dashboard') }}">→ Detailní stav zakázek</a></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const G = {{ graf|tojson }};
+const ROZPAD = {{ rozpad|tojson }};
+new Chart(document.getElementById('grafTrend'), {
+  data:{labels:G.labels, datasets:[
+    {type:'bar', label:'Fakturovatelné h', data:G.bill, backgroundColor:'#34C759', yAxisID:'y'},
+    {type:'line', label:'Tržby (Kč)', data:G.trzby, borderColor:'#00AFF0', backgroundColor:'#00AFF0', tension:.3, yAxisID:'y1'}
+  ]},
+  options:{plugins:{legend:{position:'bottom'}},
+    scales:{y:{beginAtZero:true,title:{display:true,text:'hodiny'}},
+            y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'Kč'}}}}
+});
+const palette=['#173767','#00AFF0','#34C759','#FF8D28','#FFCC00','#6155F5','#FF2D55','#00C8B3','#0088FF','#AC7F5E'];
+new Chart(document.getElementById('grafTyp'), {
+  type:'doughnut',
+  data:{labels:ROZPAD.map(r=>r[0]), datasets:[{data:ROZPAD.map(r=>r[1]),
+        backgroundColor:ROZPAD.map((_,i)=>palette[i%palette.length])}]},
+  options:{plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}
+});
+</script>
+{% endblock %}

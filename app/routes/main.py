@@ -52,7 +52,7 @@ def login():
     if request.method == "POST":
         if request.form.get("heslo") == ADMIN_PASSWORD:
             session["prihlasen"] = True
-            return redirect(url_for("main.dashboard"))
+            return redirect(url_for("main.prehled"))
         flash("Nesprávné heslo.", "error")
     return render_template("login.html")
 
@@ -70,7 +70,7 @@ def sso_vstup():
     session["user_id"]   = udaje.get("id")
     session["user_name"] = udaje.get("name")
     session["user_role"] = udaje.get("role")
-    return redirect(url_for("main.dashboard"))
+    return redirect(url_for("main.prehled"))
 
 
 @bp.route("/logout")
@@ -113,33 +113,112 @@ def _vyhodnot_riziko(z):
 
 @bp.route("/")
 @login_required
+def prehled():
+    """Celofiremní přehledový dashboard (úvodní stránka)."""
+    now = datetime.now(timezone.utc)
+    zakazky = (Zakazka.query.join(Firma)
+               .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True)).all())
+    data = clockify.prehled_vse(now.year, now.month)
+    bzm = data["bill_zkr_mesic"]
+    sazby = {z.zkratka: (z.hodinova_sazba or 0) for z in zakazky}
+
+    # YTD hodnoty na zakázku → KPI + rozpad
+    for z in zakazky:
+        z.hodiny_bill = round(sum(bzm.get(z.zkratka, {}).values()), 1)
+        z.hodiny = z.hodiny_bill  # pro KPI stačí fakturovatelné
+        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
+                              if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+
+    # Měsíční tržby (hodiny × sazba) napříč firmou
+    trzby_mesic = []
+    for m, _, _ in data["serie"]:
+        s = sum(bzm.get(zk, {}).get(m, 0) * sazby.get(zk, 0) for zk in bzm)
+        trzby_mesic.append(round(s))
+
+    kpi = {
+        "trzby": round(sum(z.trzba_skutecnost for z in zakazky)),
+        "hodin_bill": round(sum(z.hodiny_bill for z in zakazky), 1),
+        "potencial": round(sum(z.nenaplneny_potencial for z in zakazky)),
+        "zakazek": len(zakazky),
+        "klientu": len({z.firma_id for z in zakazky}),
+        "clockify_ok": clockify.je_nakonfigurovano(),
+    }
+    # Rozpad tržeb dle typu služby
+    rozpad = {}
+    for z in zakazky:
+        rozpad[z.typ_sluzby or "—"] = rozpad.get(z.typ_sluzby or "—", 0) + z.trzba_skutecnost
+    rozpad = sorted([(t, round(v)) for t, v in rozpad.items() if v], key=lambda x: -x[1])
+    # Top klienti dle tržeb
+    klienti = {}
+    for z in zakazky:
+        klienti[z.firma.nazev] = klienti.get(z.firma.nazev, 0) + z.trzba_skutecnost
+    top_klienti = sorted([(n, round(v)) for n, v in klienti.items() if v], key=lambda x: -x[1])[:8]
+
+    graf = {
+        "labels": [MESICE_CZ[m][:3] for m, _, _ in data["serie"]],
+        "bill": [b for _, _, b in data["serie"]],
+        "trzby": trzby_mesic,
+    }
+    return render_template("prehled.html", kpi=kpi, graf=graf, rozpad=rozpad,
+                           top_klienti=top_klienti, rok=now.year)
+
+
+@bp.route("/zakazky")
+@login_required
 def dashboard():
+    now = datetime.now(timezone.utc)
     # Filtry
     f_aktivita = request.args.get("aktivita", "aktivni")  # výchozí: jen aktivní
-    f_typ = request.args.get("typ", "")
+    f_typy = request.args.getlist("typ")        # více typů služeb
+    f_mesice = request.args.getlist("mesic")    # více měsíců nebo ['vse']
     hledat = request.args.get("q", "").strip()
+
+    # Měsíce → seznam (rok, měsíc). Výchozí = aktuální měsíc.
+    if not f_mesice:
+        f_mesice = [now.strftime("%Y-%m")]
+    if "vse" in f_mesice:
+        months = [(now.year, m) for m in range(1, now.month + 1)]
+        obdobi_popis = f"rok {now.year}"
+    else:
+        months = []
+        for s in f_mesice:
+            try:
+                r, m = (int(x) for x in s.split("-"))
+                months.append((r, m))
+            except ValueError:
+                pass
+        if not months:
+            months = [(now.year, now.month)]
+        obdobi_popis = ", ".join(f"{MESICE_CZ[m]} {r}" for r, m in sorted(months))
+    periods = []
+    for r, m in months:
+        posl = calendar.monthrange(r, m)[1]
+        periods.append((f"{r}-{m:02d}-01T00:00:00Z", f"{r}-{m:02d}-{posl:02d}T23:59:59Z"))
 
     q = Zakazka.query.join(Firma)
     if f_aktivita == "aktivni":   # aktivní zakázka i aktivní klient
         q = q.filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))
     elif f_aktivita == "neaktivni":  # zakázka NEBO klient neaktivní
         q = q.filter(db.or_(Zakazka.aktivni.is_(False), Firma.aktivni.is_(False)))
-    if f_typ:
-        q = q.filter(Zakazka.typ_sluzby == f_typ)
+    if f_typy:
+        q = q.filter(Zakazka.typ_sluzby.in_(f_typy))
     if hledat:
         like = f"%{hledat}%"
         q = q.filter(db.or_(Zakazka.nazev.ilike(like), Zakazka.zkratka.ilike(like)))
     zakazky = q.order_by(Zakazka.nazev).all()
 
-    # Hodiny z Clockify za zvolené období. Výchozí = aktuální měsíc.
-    mesic = request.args.get("mesic")
-    if mesic is None:
-        mesic = datetime.now(timezone.utc).strftime("%Y-%m")
-    od, do, obdobi_popis, pocet_mesicu = _obdobi(mesic)
-    clockify.obohat_zakazky(zakazky, od, do)
+    clockify.obohat_zakazky_obdobi(zakazky, periods)
 
+    def _aktivni_mesic(r, m, od_d, do_d):
+        if od_d and (r, m) < (od_d.year, od_d.month):
+            return False
+        end = do_d or now.date()
+        if (r, m) > (end.year, end.month):
+            return False
+        return True
     for z in zakazky:
-        z._pocet_mesicu = pocet_mesicu          # přepočet rozpočtu dle období
+        # měsíční rozpočet = počet aktivních měsíců projektu (od datum_od) ve zvoleném období
+        z._pocet_mesicu = sum(1 for (r, m) in months if _aktivni_mesic(r, m, z.datum_od, z.datum_do))
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
 
     typy = sorted({z.typ_sluzby for z in Zakazka.query.all() if z.typ_sluzby})
@@ -156,8 +235,8 @@ def dashboard():
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
     return render_template("stav_zakazek.html", zakazky=zakazky, souhrn=souhrn,
-                           typy=typy, f_aktivita=f_aktivita, f_typ=f_typ, hledat=hledat,
-                           mesice=_seznam_mesicu(), mesic=mesic, obdobi_popis=obdobi_popis)
+                           typy=typy, f_aktivita=f_aktivita, f_typy=f_typy, hledat=hledat,
+                           mesice=_seznam_mesicu(), f_mesice=f_mesice, obdobi_popis=obdobi_popis)
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────
@@ -176,7 +255,26 @@ def firmy():
 @login_required
 def firma_detail(id):
     firma = Firma.query.get_or_404(id)
-    return render_template("firma_detail.html", firma=firma)
+    now = datetime.now(timezone.utc)
+    zkratky = {z.zkratka for z in firma.zakazky}
+    prehled = clockify.firma_prehled(zkratky, now.year, now.month)
+    perz = prehled["zakazky"]
+    for z in firma.zakazky:
+        v = perz.get(z.zkratka) or {}
+        z.hodiny = v.get("celkem", 0.0)
+        z.hodiny_bill = v.get("bill", 0.0)
+        z.hodiny_nonbill = v.get("nonbill", 0.0)
+        z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
+                              if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+    serie = prehled["serie"]
+    graf = {"labels": [MESICE_CZ[m][:3] for m, _, _ in serie],
+            "celkem": [t for _, t, _ in serie],
+            "bill": [b for _, _, b in serie]}
+    kpi = {"pocet": len(firma.zakazky),
+           "hodin_bill": round(sum(z.hodiny_bill for z in firma.zakazky), 1),
+           "trzby": round(sum(z.trzba_skutecnost for z in firma.zakazky)),
+           "potencial": round(sum(z.nenaplneny_potencial for z in firma.zakazky))}
+    return render_template("firma_detail.html", firma=firma, graf=graf, kpi=kpi, rok=now.year)
 
 
 @bp.route("/firmy/<int:id>/nacist", methods=["POST"])
@@ -264,6 +362,9 @@ def zakazka_detail(id):
     z = Zakazka.query.get_or_404(id)
     now = datetime.now(timezone.utc)
     serie = clockify.mesicni_serie(z.zkratka, now.year, now.month)
+    od_rok = f"{now.year}-01-01T00:00:00Z"
+    do_ted = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    uzivatele = clockify.hodiny_dle_uzivatelu(z.zkratka, od_rok, do_ted)
     z._pocet_mesicu = now.month
     z.hodiny = round(sum(s[1] for s in serie), 1)
     z.hodiny_bill = round(sum(s[2] for s in serie), 1)
@@ -274,7 +375,7 @@ def zakazka_detail(id):
         "bill": [bil for _, _, bil in serie],
         "trzba": [round((bil) * (z.hodinova_sazba or 0)) for _, _, bil in serie],
     }
-    return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year)
+    return render_template("zakazka_detail.html", z=z, graf=graf, rok=now.year, uzivatele=uzivatele)
 
 
 @bp.route("/zakazka/<int:id>/upravit", methods=["GET", "POST"])
@@ -288,6 +389,7 @@ def zakazka_upravit(id):
                 return float(v) if v else None
             except ValueError:
                 return None
+        z.projektovy_manazer = request.form.get("projektovy_manazer", "").strip() or None
         typ = request.form.get("typ_rozpoctu", z.typ_rozpoctu)
         z.typ_rozpoctu = typ
         z.hodinova_sazba = _num("hodinova_sazba")
