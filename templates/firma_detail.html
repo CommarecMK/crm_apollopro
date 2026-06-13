@@ -32,6 +32,13 @@
   <canvas id="grafFirma" height="90"></canvas>
 </div>
 
+{% if vidi_finance() %}
+<div class="stat" style="margin-bottom:20px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno + nenaplněný potenciál (= plán) — {{ rok }}</h3>
+  <canvas id="grafFinFirma" height="90"></canvas>
+</div>
+{% endif %}
+
 <div class="cols2">
   <div>
     <!-- Údaje o firmě -->
@@ -208,5 +215,20 @@ if (document.getElementById('grafFirma') && GF.labels.length){
     options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}}}
   });
 }
+{% if vidi_finance() %}
+const GFIN = {{ graf_fin|tojson }};
+if (document.getElementById('grafFinFirma')){
+  new Chart(document.getElementById('grafFinFirma'), {
+    type:'bar',
+    data:{labels:GFIN.labels, datasets:[
+      {label:'Fakturováno', data:GFIN.fakt, backgroundColor:'#34C759'},
+      {label:'Nenaplněný potenciál', data:GFIN.pot, backgroundColor:'#FF383C'}
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'bottom'},
+      tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
+      scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true}}}
+  });
+}
+{% endif %}
 </script>
 {% endblock %}

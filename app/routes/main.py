@@ -416,29 +416,6 @@ def cashflow():
     # Okno: 6 měsíců zpět … aktuální … 6 měsíců vpřed
     okno = [_add(now.year, now.month, d) for d in range(-6, 7)]
 
-    def _mesicu_mezi(od, do):
-        return (do.year - od.year) * 12 + (do.month - od.month) + 1
-
-    def _plan(z, ym):
-        if z.datum_od and ym < (z.datum_od.year, z.datum_od.month):
-            return 0
-        if z.datum_do and ym > (z.datum_do.year, z.datum_do.month):
-            return 0
-        if z.typ_rozpoctu == "mesicni":
-            return (z.rozpocet_hodin_mesic or 0) * (z.hodinova_sazba or 0)
-        if z.typ_rozpoctu == "analyza":
-            c = z.budget_castka or 0
-            if z.datum_od and ym == (z.datum_od.year, z.datum_od.month):
-                return 0.4 * c
-            if z.datum_do and ym == (z.datum_do.year, z.datum_do.month):
-                return 0.6 * c
-            return 0
-        total = z.budget_castka or (z.rozpocet_hodin or 0) * (z.hodinova_sazba or 0)
-        if total and z.datum_od and z.datum_do:
-            n = _mesicu_mezi(z.datum_od, z.datum_do)
-            return total / n if n > 0 else 0
-        return 0
-
     bez_terminu = []
     for z in zakazky:
         if z.typ_rozpoctu in ("projektovy", "analyza") and (z.budget_castka or z.rozpocet_hodin) and not (z.datum_od and z.datum_do):
@@ -449,7 +426,7 @@ def cashflow():
         y, m = ym
         key = f"{y}-{m:02d}"
         je_minulost_nebo_ted = ym <= teď
-        plan = sum(_plan(z, ym) for z in zakazky)
+        plan = sum(_plan_mesic(z, ym) for z in zakazky)
         # skutečně fakturováno = fakturovatelné hodiny × efektivní sazba (jen minulost + aktuální měsíc)
         fakt = 0
         if je_minulost_nebo_ted:
@@ -574,7 +551,20 @@ def firma_detail(id):
            "potencial": round(sum(z.nenaplneny_potencial for z in aktivni))}
     uzivatele = snapshot.uzivatele_zkr(snap, aktivni_zkr)
     pm_jmena = {z.projektovy_manazer.strip() for z in aktivni if z.projektovy_manazer}
-    return render_template("firma_detail.html", firma=firma, graf=graf, kpi=kpi,
+
+    # Finanční stacked graf: fakturováno + nenaplněný potenciál = plán (po měsících)
+    fin_fakt, fin_pot = [], []
+    for m in range(1, now.month + 1):
+        ym, key = (now.year, m), f"{now.year}-{m:02d}"
+        plan_m = sum(_plan_mesic(z, ym) for z in aktivni)
+        fakt_m = sum(hod.get(z.zkratka, {}).get(key, [0, 0])[1] * z.efekt_sazba for z in aktivni)
+        fakt_m += sum(f.castka for z in aktivni for f in z.faktury
+                      if f.datum and f.datum.strftime("%Y-%m") == key)
+        fin_fakt.append(round(fakt_m))
+        fin_pot.append(round(max(plan_m - fakt_m, 0)))
+    graf_fin = {"labels": [MESICE_CZ[m][:3] for m in range(1, now.month + 1)],
+                "fakt": fin_fakt, "pot": fin_pot}
+    return render_template("firma_detail.html", firma=firma, graf=graf, graf_fin=graf_fin, kpi=kpi,
                            rok=now.year, uzivatele=uzivatele, pm_jmena=pm_jmena, updated=updated)
 
 
