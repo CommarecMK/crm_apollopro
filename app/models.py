@@ -33,3 +33,8 @@ class Zakazka(db.Model):
     @property
     def display_klient(self):
         return self.nazev.split(" - ")[0].strip()
+
+    @property
+    def ico(self):
+        """IČO firmy = část zkratky před podtržítkem (pro pozdější napojení MERK)."""
+        return self.zkratka.split("_")[0] if self.zkratka else ""

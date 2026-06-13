@@ -13,7 +13,9 @@
 <div class="stats">
   <div class="stat"><div class="num">{{ souhrn.pocet }}</div><div class="lbl">Zakázek</div></div>
   <div class="stat"><div class="num">{{ souhrn.pocet_firem }}</div><div class="lbl">Firem</div></div>
-  <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin {{ rok }} (Clockify)</div></div>
+  <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin {{ rok }} celkem</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.celkem_bill }}</div><div class="lbl">Fakturovatelné</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange)">{{ souhrn.celkem_nonbill }}</div><div class="lbl">Nefakturovatelné</div></div>
 </div>
 
 <form class="filters" method="get">
@@ -36,7 +38,10 @@
   <thead>
     <tr>
       <th>Zakázka</th><th>Firma</th><th>Typ</th>
-      <th style="text-align:right">Hodiny {{ rok }}</th><th>Stav / riziko</th>
+      <th style="text-align:right">Celkem</th>
+      <th style="text-align:right">Fakt.</th>
+      <th style="text-align:right">Nefakt.</th>
+      <th>Stav / riziko</th>
     </tr>
   </thead>
   <tbody>
@@ -46,10 +51,12 @@
       <td>{{ z.firma.nazev }}</td>
       <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
       <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>
+      <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
+      <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
+    <tr><td colspan="7" class="muted" style="text-align:center;padding:30px">Žádné zakázky neodpovídají filtru.</td></tr>
     {% endfor %}
   </tbody>
 </table>

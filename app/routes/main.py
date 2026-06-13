@@ -4,7 +4,7 @@ routes/main.py — přihlášení + kokpit "Stav zakázek".
 import os
 from datetime import datetime, timezone
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, session, flash)
+                   url_for, session, flash, jsonify)
 
 from ..extensions import db, ADMIN_PASSWORD
 from ..models import Zakazka
@@ -44,6 +44,17 @@ def sso_vstup():
 def logout():
     session.clear()
     return redirect(url_for("main.login"))
+
+
+@bp.route("/diagnostika/clockify")
+@login_required
+def diagnostika_clockify():
+    """Ukáže, co Clockify reálně vrací — pro doladění párování zakázek.
+    Otevři /diagnostika/clockify po přihlášení."""
+    rok = datetime.now(timezone.utc).year
+    od = f"{rok}-01-01T00:00:00Z"
+    do = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return jsonify(clockify.diagnostika(od, do))
 
 
 def _vyhodnot_riziko(z):
@@ -89,6 +100,8 @@ def dashboard():
     souhrn = {
         "pocet": len(zakazky),
         "celkem_hodin": round(sum(z.hodiny for z in zakazky), 1),
+        "celkem_bill": round(sum(z.hodiny_bill for z in zakazky), 1),
+        "celkem_nonbill": round(sum(z.hodiny_nonbill for z in zakazky), 1),
         "pocet_firem": len({z.firma_id for z in zakazky}),
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
