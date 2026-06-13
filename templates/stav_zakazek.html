@@ -16,6 +16,8 @@
   <div class="stat"><div class="num">{{ souhrn.celkem_hodin }}</div><div class="lbl">Hodin {{ rok }} celkem</div></div>
   <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.celkem_bill }}</div><div class="lbl">Fakturovatelné</div></div>
   <div class="stat"><div class="num" style="color:var(--orange)">{{ souhrn.celkem_nonbill }}</div><div class="lbl">Nefakturovatelné</div></div>
+  <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
+  <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ souhrn.interni_hodin }}</div><div class="lbl">Interní hodiny</div></div>
 </div>
 
 <form class="filters" method="get">
@@ -47,7 +49,7 @@
   <tbody>
     {% for z in zakazky %}
     <tr>
-      <td><div>{{ z.nazev }}</div><div class="code">{{ z.zkratka }}</div></td>
+      <td><div>{{ z.nazev }}{% if z.je_interni %} <span class="tag" style="background:var(--cyan);color:#fff">Interní</span>{% endif %}</div><div class="code">{{ z.zkratka }}</div></td>
       <td>{{ z.firma.nazev }}</td>
       <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
       <td style="text-align:right"><span class="hrs">{{ z.hodiny }}</span></td>

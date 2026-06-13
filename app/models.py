@@ -38,3 +38,9 @@ class Zakazka(db.Model):
     def ico(self):
         """IČO firmy = část zkratky před podtržítkem (pro pozdější napojení MERK)."""
         return self.zkratka.split("_")[0] if self.zkratka else ""
+
+    @property
+    def je_interni(self):
+        """Interní zakázka = pod IČO Commarecu."""
+        from .extensions import COMPANY_ICO
+        return self.ico == COMPANY_ICO

@@ -102,6 +102,8 @@ def dashboard():
         "celkem_hodin": round(sum(z.hodiny for z in zakazky), 1),
         "celkem_bill": round(sum(z.hodiny_bill for z in zakazky), 1),
         "celkem_nonbill": round(sum(z.hodiny_nonbill for z in zakazky), 1),
+        "klientske_hodin": round(sum(z.hodiny for z in zakazky if not z.je_interni), 1),
+        "interni_hodin": round(sum(z.hodiny for z in zakazky if z.je_interni), 1),
         "pocet_firem": len({z.firma_id for z in zakazky}),
         "clockify_ok": clockify.je_nakonfigurovano(),
     }
