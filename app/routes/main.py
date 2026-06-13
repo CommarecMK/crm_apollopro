@@ -447,8 +447,8 @@ def cashflow():
         "potencial": round(sum(r["potencial"] for r in radky)),
     }
     graf = {"labels": [r["kratky"] for r in radky],
-            "plan": [r["plan"] for r in radky],
-            "fakt": [r["fakt"] for r in radky]}
+            "fakt": [r["fakt"] for r in radky],
+            "zbytek": [max(r["plan"] - r["fakt"], 0) for r in radky]}
     return render_template("cashflow.html", radky=radky, graf=graf, kpi=kpi,
                            bez_terminu=bez_terminu, updated=updated)
 

@@ -12,7 +12,7 @@
 </div>
 
 <div class="stat" style="margin-bottom:20px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Plán vs. skutečně fakturováno (Kč)</h3>
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Fakturováno + zbývá do plánu (= plán) po měsících (Kč)</h3>
   <canvas id="grafCf" height="90"></canvas>
 </div>
 
@@ -46,11 +46,14 @@
 <script>
 const CF = {{ graf|tojson }};
 if (document.getElementById('grafCf')) new Chart(document.getElementById('grafCf'), {
+  type:'bar',
   data:{labels:CF.labels, datasets:[
-    {type:'bar', label:'Skutečně fakturováno', data:CF.fakt, backgroundColor:'#34C759'},
-    {type:'line', label:'Plán', data:CF.plan, borderColor:'#173767', backgroundColor:'#173767', tension:.3, pointRadius:3}
+    {label:'Fakturováno', data:CF.fakt, backgroundColor:'#34C759'},
+    {label:'Zbývá do plánu', data:CF.zbytek, backgroundColor:'#FF383C'}
   ]},
-  options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}}}
+  options:{responsive:true, plugins:{legend:{position:'bottom'},
+    tooltip:{callbacks:{footer:(it)=>'Plán: '+it.reduce((s,i)=>s+i.parsed.y,0).toLocaleString('cs-CZ')+' Kč'}}},
+    scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true}}}
 });
 </script>
 {% endblock %}
