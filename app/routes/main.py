@@ -156,7 +156,7 @@ def prehled():
     sazby = {z.zkratka: z.efekt_sazba for z in zakazky}
 
     for z in zakazky:
-        _, z.hodiny_bill = snapshot.hodiny_zkr(snap, z.zkratka, mesice_rok)
+        _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
         z.hodiny = z.hodiny_bill
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
@@ -192,10 +192,15 @@ def prehled():
     posl2 = mesice_rok[-2:]  # poslední dva měsíce
     alerty = []
     for z in zakazky:
-        # 1) blíží se konec zakázky
-        if z.datum_do and 0 <= (z.datum_do - today).days <= 30:
-            alerty.append({"barva": "oranzova", "firma_id": z.firma_id, "zakazka": z.nazev,
-                           "popis": f"Blíží se konec: {z.datum_do.strftime('%-d. %-m. %Y')}"})
+        # 1) konec zakázky — blíží se / uplynul (běží dál)
+        if z.datum_do:
+            dnu = (z.datum_do - today).days
+            if dnu < 0:
+                alerty.append({"barva": "cervena", "firma_id": z.firma_id, "zakazka": z.nazev,
+                               "popis": f"Termín uplynul ({z.datum_do.strftime('%-d. %-m. %Y')}) — protáhnout nebo uzavřít"})
+            elif dnu <= 30:
+                alerty.append({"barva": "oranzova", "firma_id": z.firma_id, "zakazka": z.nazev,
+                               "popis": f"Blíží se konec: {z.datum_do.strftime('%-d. %-m. %Y')}"})
         # 2) přečerpané hodiny vs rozpočet
         rozp = z.rozpocet_hodin_efekt
         if rozp and z.hodiny_bill >= rozp:
@@ -263,7 +268,7 @@ def dashboard():
             return False
         return True
     for z in zakazky:
-        tot, bill = snapshot.hodiny_zkr(snap, z.zkratka, mesic_keys)
+        tot, bill = snapshot.hodiny_pro_zakazku(snap, z, mesic_keys)
         z.hodiny, z.hodiny_bill = tot, bill
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         # měsíční rozpočet = počet aktivních měsíců projektu (od datum_od) ve zvoleném období
@@ -352,9 +357,9 @@ def firma_detail(id):
     hod = snap.get("hodiny", {})
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
 
-    # Per-zakázka YTD souhrn (pro tabulku – všechny zakázky)
+    # Per-zakázka souhrn (fixní projektový = kumulativně od začátku, jinak YTD)
     for z in firma.zakazky:
-        tot, bill = snapshot.hodiny_zkr(snap, z.zkratka, mesice_rok)
+        tot, bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
         z.hodiny, z.hodiny_bill = tot, bill
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
@@ -481,9 +486,9 @@ def zakazka_detail(id):
     celkem = [round(hod.get(f"{now.year}-{m:02d}", [0, 0])[0], 1) for m in mesice]
     uzivatele = snapshot.uzivatele_zkr(snap, [z.zkratka])
     z._pocet_mesicu = now.month
-    z.hodiny = round(sum(celkem), 1)
-    z.hodiny_bill = round(sum(bill), 1)
-    z.hodiny_nonbill = round(z.hodiny - z.hodiny_bill, 1)
+    # KPI/vyčerpání: u fixního projektového kumulativně od začátku projektu, jinak letošní rok
+    z.hodiny, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, [f"{now.year}-{m:02d}" for m in mesice])
+    z.hodiny_nonbill = round(max(z.hodiny - z.hodiny_bill, 0), 1)
 
     def _rozp_mesic(m):
         if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_mesic:

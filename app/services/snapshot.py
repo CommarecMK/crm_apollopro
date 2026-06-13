@@ -18,7 +18,7 @@ from ..extensions import db
 from . import clockify
 
 
-def _okno_mesicu(pocet=14):
+def _okno_mesicu(pocet=24):
     now = datetime.now(timezone.utc)
     out, r, m = [], now.year, now.month
     for _ in range(pocet):
@@ -92,6 +92,26 @@ def hodiny_zkr(snap, zkr, mesic_list):
     tot = sum(h.get(mm, [0, 0])[0] for mm in mesic_list)
     bil = sum(h.get(mm, [0, 0])[1] for mm in mesic_list)
     return round(tot, 1), round(bil, 1)
+
+
+def _sum_od(snap, zkr, od_mesic):
+    """Sečte (tot, bill) přes VŠECHNY měsíce snapshotu >= od_mesic (kumulativně za projekt)."""
+    h = (snap.get("hodiny") or {}).get(zkr, {})
+    tot = bil = 0
+    for mm, v in h.items():
+        if od_mesic and mm < od_mesic:
+            continue
+        tot += v[0]; bil += v[1]
+    return round(tot, 1), round(bil, 1)
+
+
+def hodiny_pro_zakazku(snap, z, mesice_period):
+    """Hodiny pro výpočty: u projektového s PEVNOU částkou kumulativně od začátku projektu
+    (rozpočet je na celou dobu), jinak za zvolené období."""
+    if z.typ_rozpoctu == "projektovy" and z.budget_castka:
+        od_key = z.datum_od.strftime("%Y-%m") if z.datum_od else None
+        return _sum_od(snap, z.zkratka, od_key)
+    return hodiny_zkr(snap, z.zkratka, mesice_period)
 
 
 def uzivatele_zkr(snap, zkratky):
