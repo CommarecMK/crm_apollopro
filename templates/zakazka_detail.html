@@ -11,20 +11,22 @@
     <p class="muted">{{ z.zkratka }} · IČO {{ z.ico }} · typ rozpočtu: <b>{{ z.typ_rozpoctu }}</b>
       · PM: <b>{{ z.projektovy_manazer or '—' }}</b></p>
   </div>
-  <a class="btn" href="{{ url_for('main.zakazka_upravit', id=z.id) }}">Upravit ✎</a>
+  {% if smi_zakazky() %}<a class="btn" href="{{ url_for('main.zakazka_upravit', id=z.id) }}">Upravit ✎</a>{% endif %}
 </div>
 
 <div class="stats" style="margin-top:18px">
   <div class="stat"><div class="num">{{ z.hodiny_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
   <div class="stat"><div class="num">{{ z.hodiny }}</div><div class="lbl">Hodin celkem</div></div>
   <div class="stat"><div class="num">{{ z.rozpocet_hodin_efekt or '—' }}</div><div class="lbl">Rozpočet h (rok)</div></div>
+  {% if vidi_finance() %}
   <div class="stat"><div class="num">{{ z.hodinova_sazba|int if z.hodinova_sazba else '—' }}</div><div class="lbl">Sazba Kč/h</div></div>
   <div class="stat"><div class="num">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržba Kč (rok)</div></div>
   <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
+  {% endif %}
 </div>
 
 <div class="stat" style="margin-top:8px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny a tržby po měsících — {{ rok }}</h3>
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:12px">Hodiny po měsících — {{ rok }}</h3>
   <canvas id="graf" height="110"></canvas>
 </div>
 
@@ -39,13 +41,14 @@
         <td style="text-align:right;color:var(--green)">{{ bill }}</td>
         <td style="text-align:right">{{ celkem }}</td>
         <td style="text-align:center">
-          {% if jmeno != z.projektovy_manazer %}
+          {% if jmeno == z.projektovy_manazer %}✓
+          {% elif smi_zakazky() %}
           <form method="post" action="{{ url_for('main.zakazka_pm', id=z.id) }}" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="jmeno" value="{{ jmeno }}">
             <button type="submit" style="border:none;background:none;color:var(--cyan-dark);cursor:pointer;font-size:12px">nastavit PM</button>
           </form>
-          {% else %}✓{% endif %}
+          {% endif %}
         </td>
       </tr>
       {% else %}
@@ -58,18 +61,17 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const G = {{ graf|tojson }};
+const FIN = {{ 'true' if vidi_finance() else 'false' }};
+const DS = [
+  {type:'bar', label:'Fakturovatelné h', data:G.bill, backgroundColor:'#34C759', yAxisID:'y'},
+  {type:'bar', label:'Celkem h', data:G.celkem, backgroundColor:'#BAC3D2', yAxisID:'y'},
+  {type:'line', label:'Rozpočet h (smlouva)', data:G.rozpocet, borderColor:'#173767',
+   backgroundColor:'#173767', borderDash:[6,4], tension:0, pointRadius:3, yAxisID:'y'}
+];
+if (FIN) DS.push({type:'line', label:'Tržba (Kč)', data:G.trzba, borderColor:'#00AFF0',
+   backgroundColor:'#00AFF0', tension:.3, yAxisID:'y1'});
 new Chart(document.getElementById('graf'), {
-  data: {
-    labels: G.labels,
-    datasets: [
-      {type:'bar', label:'Fakturovatelné h', data:G.bill, backgroundColor:'#34C759', yAxisID:'y'},
-      {type:'bar', label:'Celkem h', data:G.celkem, backgroundColor:'#BAC3D2', yAxisID:'y'},
-      {type:'line', label:'Rozpočet h (smlouva)', data:G.rozpocet, borderColor:'#173767',
-       backgroundColor:'#173767', borderDash:[6,4], tension:0, pointRadius:3, yAxisID:'y'},
-      {type:'line', label:'Tržba (Kč)', data:G.trzba, borderColor:'#00AFF0', backgroundColor:'#00AFF0',
-       tension:.3, yAxisID:'y1'}
-    ]
-  },
+  data: { labels: G.labels, datasets: DS },
   options: {
     responsive:true,
     plugins:{legend:{position:'bottom'}},

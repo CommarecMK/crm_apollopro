@@ -18,8 +18,10 @@
   <div class="stat"><div class="num">{{ kpi.pocet }}</div><div class="lbl">Zakázek</div></div>
   <div class="stat"><div class="num" style="color:var(--green)">{{ kpi.hodin_bill }}</div><div class="lbl">Fakt. hodin (rok {{ rok }})</div></div>
   {% if kpi.rozpocet_h %}<div class="stat"><div class="num">{{ kpi.rozpocet_h }}</div><div class="lbl">Rozpočet h dle smlouvy</div></div>{% endif %}
+  {% if vidi_finance() %}
   <div class="stat"><div class="num">{{ "{:,.0f}".format(kpi.trzby).replace(",", " ") }}</div><div class="lbl">Tržby Kč (rok)</div></div>
   <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(kpi.potencial).replace(",", " ") }}</div><div class="lbl">Nenapln. potenciál Kč</div></div>
+  {% endif %}
 </div>
 
 <!-- Graf po měsících -->
@@ -56,12 +58,14 @@
           <td>{{ k.email or '—' }}</td><td>{{ k.telefon or '—' }}</td>
           <td><span class="tag">{{ k.zdroj }}</span></td>
           <td style="white-space:nowrap;text-align:right">
+            {% if smi_klient() %}
             <a href="{{ url_for('main.kontakt_upravit', id=k.id) }}">Upravit</a>
             <form method="post" action="{{ url_for('main.kontakt_smazat', id=k.id) }}" style="display:inline"
                   onsubmit="return confirm('Smazat kontakt {{ k.jmeno }}?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}
@@ -71,6 +75,7 @@
     </table>
 
     <!-- Přidat kontakt -->
+    {% if smi_klient() %}
     <form method="post" action="{{ url_for('main.kontakt_novy', id=firma.id) }}"
           style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -80,12 +85,13 @@
       <input type="text" name="telefon" placeholder="Telefon" style="padding:8px 10px;border:1px solid var(--n7);border-radius:8px">
       <button class="btn" type="submit">+ Přidat kontakt</button>
     </form>
+    {% endif %}
 
     <!-- Zakázky firmy -->
     <h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky</h2>
     {% if not firma.aktivni %}<p class="muted" style="font-size:12px;margin-bottom:8px">Klient je neaktivní → všechny jeho zakázky jsou neaktivní.</p>{% endif %}
     <table>
-      <thead><tr><th>Zakázka</th><th>Typ</th><th>PM</th><th style="text-align:right">Fakt. h</th><th style="text-align:right">Tržba Kč</th><th style="text-align:center">Aktivní</th></tr></thead>
+      <thead><tr><th>Zakázka</th><th>Typ</th><th>PM</th><th style="text-align:right">Fakt. h</th>{% if vidi_finance() %}<th style="text-align:right">Tržba Kč</th>{% endif %}<th style="text-align:center">Aktivní</th></tr></thead>
       <tbody>
         {% for z in firma.zakazky %}
         <tr>
@@ -93,8 +99,9 @@
           <td><span class="tag">{{ z.typ_sluzby or '—' }}</span></td>
           <td>{{ z.projektovy_manazer or '—' }}</td>
           <td style="text-align:right;color:var(--green)">{{ z.hodiny_bill }}</td>
-          <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
+          {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>{% endif %}
           <td style="text-align:center">
+            {% if smi_zakazky() %}
             <form method="post" action="{{ url_for('main.zakazka_toggle', id=z.id) }}" style="display:inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <label class="switch">
@@ -103,6 +110,7 @@
                 <span class="slider"></span>
               </label>
             </form>
+            {% else %}{{ 'Ano' if z.je_aktivni else 'Ne' }}{% endif %}
           </td>
         </tr>
         {% else %}
@@ -129,6 +137,7 @@
 
   <!-- Akce -->
   <div>
+  {% if smi_zakazky() %}
   <div class="stat" style="margin-bottom:18px">
     <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Klient</h3>
     <form method="post" action="{{ url_for('main.firma_toggle', id=firma.id) }}" style="display:flex;align-items:center;gap:10px">
@@ -141,7 +150,9 @@
     </form>
     <p class="muted" style="font-size:12px;margin-top:8px">Neaktivní klient = všechny jeho zakázky neaktivní.</p>
   </div>
+  {% endif %}
 
+  {% if smi_klient() %}
   <div class="stat">
     <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Doplnit data</h3>
     <p class="muted" style="font-size:13px;margin-bottom:14px">
@@ -157,6 +168,7 @@
     <hr style="border:none;border-top:1px solid var(--n8);margin:16px 0">
     <a class="btn btn-ghost" href="{{ url_for('main.firma_upravit', id=firma.id) }}" style="width:100%;text-align:center;display:block">Upravit ručně ✎</a>
   </div>
+  {% endif %}
   </div>
 </div>
 

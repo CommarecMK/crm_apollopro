@@ -19,8 +19,10 @@
   <div class="stat"><div class="num" style="color:var(--orange)">{{ souhrn.celkem_nonbill }}</div><div class="lbl">Nefakturovatelné</div></div>
   <div class="stat"><div class="num">{{ souhrn.klientske_hodin }}</div><div class="lbl">Klientské hodiny</div></div>
   <div class="stat"><div class="num" style="color:var(--cyan-dark)">{{ souhrn.interni_hodin }}</div><div class="lbl">Interní hodiny</div></div>
+  {% if vidi_finance() %}
   <div class="stat"><div class="num">{{ "{:,.0f}".format(souhrn.trzby_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržby (Kč, období)</div></div>
   <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(souhrn.potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál (Kč)</div></div>
+  {% endif %}
 </div>
 
 <form class="filters" method="get">
@@ -58,8 +60,8 @@
       <th style="text-align:right">Fakt. h</th>
       <th style="text-align:right">Nefakt. h</th>
       <th style="text-align:right">Rozpočet h</th>
-      <th style="text-align:right">Tržba (Kč)</th>
-      <th style="text-align:right">Potenciál (Kč)</th>
+      {% if vidi_finance() %}<th style="text-align:right">Tržba (Kč)</th>
+      <th style="text-align:right">Potenciál (Kč)</th>{% endif %}
       <th>Riziko</th>
     </tr>
   </thead>
@@ -75,8 +77,8 @@
       <td style="text-align:right;color:var(--green)"><span class="hrs">{{ z.hodiny_bill }}</span></td>
       <td style="text-align:right;color:var(--orange)">{{ z.hodiny_nonbill }}</td>
       <td style="text-align:right">{{ z.rozpocet_hodin_efekt or '—' }}</td>
-      <td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
-      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>
+      {% if vidi_finance() %}<td style="text-align:right">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") if z.trzba_skutecnost else '—' }}</td>
+      <td style="text-align:right;color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") if z.nenaplneny_potencial else '—' }}</td>{% endif %}
       <td><span class="dot {{ z.riziko }}"></span>{{ z.riziko_popis }}</td>
     </tr>
     {% else %}
