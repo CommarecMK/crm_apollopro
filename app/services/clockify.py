@@ -6,6 +6,7 @@ kterou má uživatel uloženou v poli "Note" u Clockify klienta.
 Hodiny se berou ze summary reportu seskupeného podle CLIENT (případně PROJECT).
 """
 import time
+from datetime import datetime, timezone, timedelta
 import requests
 from ..extensions import CLOCKIFY_API_KEY, CLOCKIFY_WORKSPACE_ID
 
@@ -320,6 +321,46 @@ def hodiny_uzivatele_firma(zkratky, datum_od, datum_do):
     except Exception as e:
         print(f"[clockify] uzivatele firma: {e}")
         return []
+
+
+def posledni_aktivita(dny=60):
+    """Vrátí {zkratka: 'YYYY-MM-DD'} poslední odpracovaný záznam (za posledních `dny` dní)."""
+    if not je_nakonfigurovano():
+        return {}
+    try:
+        ws = _workspace_id()
+        id2zkr = {k.get("id"): (k.get("note") or "").strip()
+                  for k in _seznam(ws, "clients") if (k.get("note") or "").strip()}
+        proj2cli = {p.get("id"): p.get("clientId") for p in _seznam(ws, "projects")}
+        do = datetime.now(timezone.utc)
+        od = do - timedelta(days=dny)
+        out, page = {}, 1
+        while True:
+            body = {"dateRangeStart": od.strftime("%Y-%m-%dT00:00:00Z"),
+                    "dateRangeEnd": do.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "detailedFilter": {"page": page, "pageSize": 1000, "sortColumn": "DATE"},
+                    "sortOrder": "DESCENDING"}
+            r = requests.post(f"{REPORTS}/workspaces/{ws}/reports/detailed",
+                              headers=_headers(), json=body, timeout=TIMEOUT)
+            r.raise_for_status()
+            entries = r.json().get("timeentries", []) or []
+            if not entries:
+                break
+            for e in entries:
+                cid = e.get("clientId") or proj2cli.get(e.get("projectId"))
+                zkr = id2zkr.get(cid)
+                if not zkr:
+                    continue
+                d = (e.get("timeInterval") or {}).get("start", "")[:10]
+                if d and (zkr not in out or d > out[zkr]):
+                    out[zkr] = d
+            if len(entries) < 1000:
+                break
+            page += 1
+        return out
+    except Exception as e:
+        print(f"[clockify] posledni_aktivita: {e}")
+        return {}
 
 
 def prehled_vse(rok, do_mesic):

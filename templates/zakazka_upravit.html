@@ -24,11 +24,12 @@
     <input type="text" name="hodinova_sazba" value="{{ z.hodinova_sazba or '' }}" placeholder="např. 1500" style="{{ istyl }}">
   </label>
 
-  <!-- Měsíční -->
+  <!-- Měsíční (interim) — zadává se TÝDENNÍ rozpočet -->
   <div class="blok blok-mesicni">
     <label style="display:block;margin-bottom:14px">
-      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Rozpočet hodin / měsíc</span>
-      <input type="text" name="rozpocet_hodin_mesic" value="{{ z.rozpocet_hodin_mesic or '' }}" placeholder="např. 40" style="{{ istyl }}">
+      <span style="display:block;font-size:13px;color:#667;margin-bottom:4px">Rozpočet hodin / týden</span>
+      <input type="text" name="rozpocet_hodin_tyden" value="{{ z.rozpocet_hodin_tyden or '' }}" placeholder="např. 10" style="{{ istyl }}">
+      <span style="display:block;font-size:12px;color:#99a;margin-top:4px">Měsíční plán se dopočítá podle počtu týdnů (i u prvního/posledního měsíce dle data od/do).</span>
     </label>
   </div>
 

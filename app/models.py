@@ -103,7 +103,8 @@ class Zakazka(db.Model):
     typ_rozpoctu   = db.Column(db.String(20), default="projektovy")  # mesicni | projektovy | analyza
     hodinova_sazba = db.Column(db.Float, nullable=True)      # Kč/h
     rozpocet_hodin       = db.Column(db.Float, nullable=True)  # projektový rozpočet hodin
-    rozpocet_hodin_mesic = db.Column(db.Float, nullable=True)  # měsíční rozpočet hodin
+    rozpocet_hodin_mesic = db.Column(db.Float, nullable=True)  # (legacy) měsíční rozpočet hodin
+    rozpocet_hodin_tyden = db.Column(db.Float, nullable=True)  # týdenní rozpočet hodin (interim)
     budget_castka  = db.Column(db.Float, nullable=True)      # pevná částka (projekt) / cena analýzy
     analyza_zaloha    = db.Column(db.Boolean, default=False)  # uhrazeno 40 % předem
     analyza_odevzdano = db.Column(db.Boolean, default=False)  # odevzdáno → doplatek 60 %
@@ -152,7 +153,8 @@ class Zakazka(db.Model):
         if self.typ_rozpoctu == "jednorazovy":
             return None
         if self.typ_rozpoctu == "mesicni":
-            return (self.rozpocet_hodin_mesic or 0) * self._mesicu if self.rozpocet_hodin_mesic else None
+            w = self.rozpocet_hodin_tyden or 0
+            return round(w * getattr(self, "_tydny", 0), 1) if w else None
         if self.rozpocet_hodin:
             return self.rozpocet_hodin
         if self.budget_castka and self.hodinova_sazba:
@@ -177,7 +179,7 @@ class Zakazka(db.Model):
         if self.typ_rozpoctu == "jednorazovy":
             return 0  # nárazové prodeje neplánujeme
         if self.typ_rozpoctu == "mesicni":
-            return (self.rozpocet_hodin_mesic or 0) * self._mesicu * (self.hodinova_sazba or 0)
+            return (self.rozpocet_hodin_tyden or 0) * getattr(self, "_tydny", 0) * (self.hodinova_sazba or 0)
         if self.typ_rozpoctu == "analyza":
             return self.budget_castka or 0
         return self.budget_castka if self.budget_castka else (self.rozpocet_hodin or 0) * (self.hodinova_sazba or 0)

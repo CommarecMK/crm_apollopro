@@ -71,8 +71,9 @@ def obnov():
         do_ted = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         uzivatele = clockify.uzivatele_vsech_klientu(od_rok, do_ted)
 
+        posledni = clockify.posledni_aktivita()
         data = {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "mesice": labels, "hodiny": hodiny, "uzivatele": uzivatele}
+                "mesice": labels, "hodiny": hodiny, "uzivatele": uzivatele, "posledni": posledni}
 
         snap = Snapshot.query.first() or Snapshot()
         snap.updated = data["updated"]

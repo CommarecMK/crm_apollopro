@@ -3,7 +3,7 @@ routes/main.py — přihlášení + kokpit "Stav zakázek".
 """
 import os
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 
@@ -25,6 +25,22 @@ def _mesicu_mezi(od, do):
     return (do.year - od.year) * 12 + (do.month - od.month) + 1
 
 
+def _tydny_v_mesici(z, y, m):
+    """Počet týdnů, kdy je zakázka v daném měsíci aktivní (dle datum_od/do). Aktivní dny / 7."""
+    first = date(y, m, 1)
+    last = date(y, m, calendar.monthrange(y, m)[1])
+    start = max(first, z.datum_od) if z.datum_od else first
+    end = min(last, z.datum_do) if z.datum_do else last
+    if end < start:
+        return 0
+    return ((end - start).days + 1) / 7.0
+
+
+def _tydny_obdobi(z, months):
+    """Součet týdnů přes seznam měsíců (y,m)."""
+    return sum(_tydny_v_mesici(z, y, m) for (y, m) in months)
+
+
 def _plan_mesic(z, ym):
     """Plánovaná fakturace zakázky v daném měsíci ym=(rok,měsíc)."""
     if z.datum_od and ym < (z.datum_od.year, z.datum_od.month):
@@ -32,7 +48,7 @@ def _plan_mesic(z, ym):
     if z.datum_do and ym > (z.datum_do.year, z.datum_do.month):
         return 0
     if z.typ_rozpoctu == "mesicni":
-        return (z.rozpocet_hodin_mesic or 0) * (z.hodinova_sazba or 0)
+        return (z.rozpocet_hodin_tyden or 0) * _tydny_v_mesici(z, ym[0], ym[1]) * (z.hodinova_sazba or 0)
     if z.typ_rozpoctu == "analyza":
         c = z.budget_castka or 0
         if z.datum_od and ym == (z.datum_od.year, z.datum_od.month):
@@ -256,6 +272,7 @@ def prehled():
         z.hodiny = z.hodiny_bill
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        z._tydny = _tydny_obdobi(z, [(now.year, mm) for mm in range(1, now.month + 1)])
     _napln_faktury(zakazky, mesice_rok)
 
     aktivni_zkr = {z.zkratka for z in zakazky}
@@ -303,11 +320,20 @@ def prehled():
         if rozp and z.hodiny_bill >= rozp:
             alerty.append({"barva": "cervena", "firma_id": z.firma_id, "zakazka": z.nazev,
                            "popis": f"Přečerpané hodiny ({round(z.hodiny_bill)} / {round(rozp)} h)"})
-        # 3) dlouho bez aktivity (poslední 2 měsíce 0 h)
-        akt = sum(hod.get(z.zkratka, {}).get(mm, [0, 0])[0] for mm in posl2)
-        if akt == 0:
-            alerty.append({"barva": "neutral", "firma_id": z.firma_id, "zakazka": z.nazev,
-                           "popis": "Žádná aktivita poslední 2 měsíce"})
+    # 3) Nečinnost klienta — aktivní klient bez záznamu v Clockify > 14 dní (z poslední aktivity)
+    posledni = snap.get("posledni", {})
+    fdata = {}
+    for z in zakazky:
+        e = fdata.setdefault(z.firma_id, {"nazev": z.firma.nazev, "id": z.firma_id, "last": None})
+        d = posledni.get(z.zkratka)
+        if d and (e["last"] is None or d > e["last"]):
+            e["last"] = d
+    for e in fdata.values():
+        if e["last"]:
+            dni = (today - date.fromisoformat(e["last"])).days
+            if dni > 14:
+                alerty.append({"barva": "cervena", "firma_id": e["id"], "zakazka": e["nazev"],
+                               "popis": f"Klient bez aktivity {dni} dní (poslední práce {e['last']})"})
     poradi = {"cervena": 0, "oranzova": 1, "neutral": 2}
     alerty.sort(key=lambda a: poradi.get(a["barva"], 3))
 
@@ -370,6 +396,7 @@ def dashboard():
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         # měsíční rozpočet = počet aktivních měsíců projektu (od datum_od) ve zvoleném období
         z._pocet_mesicu = sum(1 for (r, m) in months if _aktivni_mesic(r, m, z.datum_od, z.datum_do))
+        z._tydny = _tydny_obdobi(z, months)
     _napln_faktury(zakazky, mesic_keys)
     for z in zakazky:
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
@@ -448,6 +475,7 @@ def pm_prehled():
         r["trzby"] = round(r["trzby"])
         r["potencial"] = round(r["potencial"])
         r["plan"] = round(r["plan"])
+        r["naplneni"] = round(100 * r["trzby"] / r["plan"]) if r["plan"] else 0
     graf = {"labels": [r["pm"] for r in radky],
             "trzby": [r["trzby"] for r in radky],
             "potencial": [r["potencial"] for r in radky]}
@@ -475,6 +503,7 @@ def pm_detail(jmeno):
         z.hodiny = z.hodiny_bill
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        z._tydny = _tydny_obdobi(z, [(now.year, mm) for mm in range(1, now.month + 1)])
         z._fakt, z._pot, z._plan = _fin_mesicne(z, hod, now.month, now.year)
         z.riziko, z.riziko_popis = _vyhodnot_riziko(z)
     zakazky.sort(key=lambda z: -z._plan)
@@ -619,10 +648,12 @@ def firma_detail(id):
         z.hodiny_nonbill = round(max(tot - bill, 0), 1)
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
+        z._tydny = _tydny_obdobi(z, [(now.year, mm) for mm in range(1, now.month + 1)])
     _napln_faktury(firma.zakazky, mesice_rok)
 
-    # Graf, KPI a hodiny lidí = JEN AKTIVNÍ zakázky
-    aktivni = [z for z in firma.zakazky if z.je_aktivni]
+    # Graf, KPI a hodiny lidí = aktivní zakázky; u neaktivního klienta (žádná aktivní)
+    # ukážeme celou historii (všechny zakázky), ať se hodiny i tržby zobrazí.
+    aktivni = [z for z in firma.zakazky if z.je_aktivni] or list(firma.zakazky)
     aktivni_zkr = {z.zkratka for z in aktivni}
 
     def _akt_v_mesici(z, m):
@@ -636,8 +667,8 @@ def firma_detail(id):
         mm = f"{now.year}-{m:02d}"
         serie_bill.append(round(sum(hod.get(zk, {}).get(mm, [0, 0])[1] for zk in aktivni_zkr), 1))
         serie_tot.append(round(sum(hod.get(zk, {}).get(mm, [0, 0])[0] for zk in aktivni_zkr), 1))
-        rozpocet_mesic.append(round(sum((z.rozpocet_hodin_mesic or 0) for z in aktivni
-                                        if z.typ_rozpoctu == "mesicni" and _akt_v_mesici(z, m))))
+        rozpocet_mesic.append(round(sum((z.rozpocet_hodin_tyden or 0) * _tydny_v_mesici(z, now.year, m)
+                                        for z in aktivni if z.typ_rozpoctu == "mesicni")))
     graf = {"labels": [MESICE_CZ[m][:3] for m in range(1, now.month + 1)],
             "celkem": serie_tot, "bill": serie_bill, "rozpocet": rozpocet_mesic}
     kpi = {"pocet": len(aktivni),
@@ -759,19 +790,16 @@ def zakazka_detail(id):
     celkem = [round(hod.get(f"{now.year}-{m:02d}", [0, 0])[0], 1) for m in mesice]
     uzivatele = snapshot.uzivatele_zkr(snap, [z.zkratka])
     z._pocet_mesicu = now.month
+    z._tydny = _tydny_obdobi(z, [(now.year, mm) for mm in range(1, now.month + 1)])
     # KPI/vyčerpání: u fixního projektového kumulativně od začátku projektu, jinak letošní rok
     z.hodiny, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, [f"{now.year}-{m:02d}" for m in mesice])
     z.hodiny_nonbill = round(max(z.hodiny - z.hodiny_bill, 0), 1)
     _napln_faktury([z], [f"{now.year}-{m:02d}" for m in mesice])
 
     def _rozp_mesic(m):
-        if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_mesic:
+        if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_tyden:
             return 0
-        if z.datum_od and (now.year, m) < (z.datum_od.year, z.datum_od.month):
-            return 0
-        if z.datum_do and (now.year, m) > (z.datum_do.year, z.datum_do.month):
-            return 0
-        return round(z.rozpocet_hodin_mesic)
+        return round((z.rozpocet_hodin_tyden or 0) * _tydny_v_mesici(z, now.year, m))
     graf = {
         "labels": [MESICE_CZ[m][:3] for m in mesice],
         "celkem": celkem,
@@ -838,7 +866,7 @@ def zakazka_upravit(id):
         z.typ_rozpoctu = typ
         z.hodinova_sazba = _num("hodinova_sazba")
         z.rozpocet_hodin = _num("rozpocet_hodin")
-        z.rozpocet_hodin_mesic = _num("rozpocet_hodin_mesic")
+        z.rozpocet_hodin_tyden = _num("rozpocet_hodin_tyden")
         # částka podle typu (různá pole ve formuláři)
         if typ == "analyza":
             z.budget_castka = _num("budget_castka_a")

@@ -43,9 +43,24 @@ def create_app():
         from .seed import seed_pokud_prazdno, backfill_ico
         seed_pokud_prazdno()
         backfill_ico()            # doplní IČO firmám z jejich zakázek
+        _backfill_tyden()         # převede staré měsíční rozpočty na týdenní
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
 
     return app
+
+
+def _backfill_tyden():
+    """Převede starý měsíční rozpočet hodin na týdenní (děleno 4.33), kde týdenní chybí."""
+    from .models import Zakazka
+    zmeneno = 0
+    for z in Zakazka.query.filter(Zakazka.typ_rozpoctu == "mesicni",
+                                  Zakazka.rozpocet_hodin_mesic.isnot(None),
+                                  Zakazka.rozpocet_hodin_tyden.is_(None)).all():
+        z.rozpocet_hodin_tyden = round((z.rozpocet_hodin_mesic or 0) / 4.33, 1)
+        zmeneno += 1
+    if zmeneno:
+        db.session.commit()
+        print(f"[backfill] Převedeno {zmeneno} měsíčních rozpočtů na týdenní.")
 
 
 def _bootstrap_admin():
@@ -92,6 +107,7 @@ def _inline_migrace():
                 "typ_rozpoctu": "VARCHAR(20) DEFAULT 'projektovy'",
                 "hodinova_sazba": "FLOAT",
                 "rozpocet_hodin_mesic": "FLOAT",
+                "rozpocet_hodin_tyden": "FLOAT",
                 "budget_castka": "FLOAT",
                 "analyza_zaloha": "BOOLEAN DEFAULT FALSE",
                 "analyza_odevzdano": "BOOLEAN DEFAULT FALSE",
