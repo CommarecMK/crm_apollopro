@@ -187,10 +187,17 @@ def sso_vstup():
     portal = os.environ.get("PORTAL_URL", "https://apollopro.io")
     if not udaje:
         return redirect(portal + "/login")
+    # Portálová role superadmin → kokpit admin (jinak default majitel)
+    je_superadmin = udaje.get("role") == "superadmin"
     u = User.query.filter_by(sso_id=udaje.get("id")).first()
     if not u:
-        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"), role="majitel", aktivni=True)
+        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"),
+                 role="admin" if je_superadmin else "majitel", aktivni=True)
         db.session.add(u)
+        db.session.commit()
+    elif je_superadmin and u.role != "admin":
+        # promotion superadmina z portálu (jeho roli v kokpitu nedegradujeme)
+        u.role = "admin"
         db.session.commit()
     if not u.aktivni:
         return redirect(portal + "/login")
