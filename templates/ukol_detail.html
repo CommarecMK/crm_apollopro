@@ -14,16 +14,27 @@
 <div class="stats">
   <div class="stat"><div class="num" style="font-size:16px">{{ u.zadan or '—' }}</div><div class="lbl">Zadáno</div></div>
   <div class="stat"><div class="num" style="font-size:16px;color:{{ 'var(--red)' if u.termin else 'var(--navy)' }}">{{ u.termin or '—' }}</div><div class="lbl">Termín</div></div>
-  <div class="stat"><div class="num" style="font-size:16px">{{ u.posledni or '—' }}</div><div class="lbl">Poslední iterace</div></div>
+  <div class="stat"><div class="num" style="font-size:16px">{{ u.posledni or '—' }}</div><div class="lbl">Poslední iterace{% if u.dni_od_iterace is not none %} · před {{ u.dni_od_iterace }} dny{% endif %}</div></div>
   <div class="stat"><div class="num" style="font-size:16px">{{ u.resitel or '—' }}</div><div class="lbl">Řešitel</div></div>
 </div>
 
 <div class="cols2">
   <div>
-    {% if u.popis %}
+    {% macro prilohy(seznam) %}
+      {% if seznam %}
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        {% for p in seznam %}
+        <a href="{{ u.freelo_url }}" target="_blank" class="tag" style="text-decoration:none">📎 {{ p.nazev }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endmacro %}
+
+    {% if u.popis or u.popis_prilohy %}
     <div class="stat" style="margin-bottom:18px">
-      <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Popis</h3>
+      <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Popis úkolu</h3>
       <div style="font-size:14px;line-height:1.6">{{ u.popis|safe }}</div>
+      {{ prilohy(u.popis_prilohy) }}
     </div>
     {% endif %}
 
@@ -37,6 +48,7 @@
     <div class="stat" style="margin-bottom:10px">
       <div style="font-size:13px;color:#667;margin-bottom:4px"><b>{{ k.autor or '—' }}</b> · {{ k.datum or '' }}</div>
       <div style="font-size:14px;line-height:1.5">{{ k.text|safe }}</div>
+      {{ prilohy(k.prilohy) }}
     </div>
     {% else %}
     <p class="muted" style="font-size:13px">Zatím žádné komentáře.</p>

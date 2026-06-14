@@ -3,6 +3,41 @@
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Operativa</h1>
 <p class="muted" style="margin-bottom:18px">Klienti — úkoly, dokumenty, zápisy, LOE</p>
 
+{% if dash.napojeno %}
+<!-- Dashboard všech úkolů (napojení klienti) -->
+<div class="stats" style="margin-bottom:14px">
+  <div class="stat"><div class="num">{{ dash.open }}</div><div class="lbl">Otevřených úkolů</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if dash.bez_reakce else 'var(--navy)' }}">{{ dash.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if dash.po_terminu else 'var(--navy)' }}">{{ dash.po_terminu }}</div><div class="lbl">Po termínu</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if dash.max_zpozdeni else 'var(--navy)' }}">{{ dash.max_zpozdeni }}</div><div class="lbl">Největší zpoždění (dní)</div></div>
+  <div class="stat"><div class="num">{{ dash.napojeno }}</div><div class="lbl">Napojených klientů</div></div>
+</div>
+
+{% if top_overdue %}
+<div class="stat" style="margin-bottom:22px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Nejvíce po termínu</h3>
+  <div class="tabulka">
+  <table>
+    <thead><tr><th>Úkol</th><th>Klient</th><th>Řešitel</th><th>Termín</th><th style="text-align:right">Zpoždění</th></tr></thead>
+    <tbody>
+      {% for t in top_overdue %}
+      <tr>
+        <td><a href="{{ url_for('main.ukol_detail', task_id=t.id) }}">{{ t.nazev }}</a></td>
+        <td><a href="{{ url_for('main.operativa_klient', id=t.firma_id) }}">{{ t.firma }}</a></td>
+        <td>{{ t.resitel or '—' }}</td>
+        <td style="color:var(--red)">{{ t.termin }}</td>
+        <td style="text-align:right;color:var(--red);font-weight:700">{{ t.zpozdeni }} dní</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% elif freelo_ok %}
+<div class="note">Zatím není napojený žádný klient na Freelo. Otevři klienta a napoj jeho tasklist.</div>
+{% endif %}
+
 <form class="filters" method="get" style="margin-bottom:18px">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat klienta…">
   <select name="aktivita">
@@ -16,15 +51,27 @@
 
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
   {% for f in firmy %}
+  {% set s = souhrny.get(f.id) %}
   <a href="{{ url_for('main.operativa_klient', id=f.id) }}" class="stat" style="text-decoration:none;color:var(--text);display:block">
-    <div style="font-weight:700;color:var(--navy)">{{ f.nazev }}</div>
-    <div class="muted" style="font-size:12px;margin-top:4px">
-      {{ f.zakazky|length }} zakázek
-      {% if f.freelo_tasklist_id %}· <span style="color:var(--cyan-dark)">Freelo ✓</span>{% endif %}
-    </div>
+    <div style="font-weight:700;color:var(--navy);margin-bottom:6px">{{ f.nazev }}</div>
+    {% if s %}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">
+        <span><b style="color:var(--navy)">{{ s.open }}</b> otevřených</span>
+        {% if s.po_terminu %}<span style="color:var(--red)"><b>{{ s.po_terminu }}</b> po termínu</span>{% endif %}
+        {% if s.bez_reakce %}<span style="color:var(--orange)"><b>{{ s.bez_reakce }}</b> bez reakce</span>{% endif %}
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:6px">
+        {% if s.posledni_reakce %}Poslední reakce: {{ s.posledni_reakce }}{% else %}Zatím bez reakce{% endif %}
+      </div>
+    {% else %}
+      <div class="muted" style="font-size:12px">
+        {{ f.zakazky|length }} zakázek
+        {% if not f.freelo_tasklist_id %}· <span style="color:#aab">Freelo nenapojeno</span>{% endif %}
+      </div>
+    {% endif %}
   </a>
   {% else %}
-  <p class="muted">Žádní aktivní klienti.</p>
+  <p class="muted">Žádní klienti.</p>
   {% endfor %}
 </div>
 {% endblock %}

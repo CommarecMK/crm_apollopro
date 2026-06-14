@@ -630,7 +630,27 @@ def operativa():
     if hledat:
         q = q.filter(Firma.nazev.ilike(f"%{hledat}%"))
     seznam = q.order_by(Firma.nazev).all()
-    return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita)
+
+    # Dashboard + souhrny z Freela přes VŠECHNY napojené klienty (nezávisle na filtru)
+    souhrny, top_overdue = {}, []
+    dash = {"open": 0, "bez_reakce": 0, "po_terminu": 0, "max_zpozdeni": 0, "napojeno": 0}
+    if freelo_service.je_nakonfigurovano():
+        napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
+        for f in napojene:
+            s = freelo_service.souhrn_tasklistu(f.freelo_tasklist_id)
+            souhrny[f.id] = s
+            dash["open"] += s["open"]
+            dash["bez_reakce"] += s["bez_reakce"]
+            dash["po_terminu"] += s["po_terminu"]
+            dash["max_zpozdeni"] = max(dash["max_zpozdeni"], s["max_zpozdeni"])
+            dash["napojeno"] += 1
+            for ot in s["overdue_tasks"]:
+                top_overdue.append({**ot, "firma": f.nazev, "firma_id": f.id})
+        top_overdue.sort(key=lambda x: -x["zpozdeni"])
+        top_overdue = top_overdue[:8]
+    return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita,
+                           souhrny=souhrny, dash=dash, top_overdue=top_overdue,
+                           freelo_ok=freelo_service.je_nakonfigurovano())
 
 
 @bp.route("/operativa/<int:id>")
@@ -663,8 +683,8 @@ def ukol_detail(task_id):
         return redirect(url_for("main.operativa"))
     firma = Firma.query.filter_by(freelo_tasklist_id=detail.get("tasklist_id")).first()
     reseni = freelo_service.workers(detail.get("project_id"))
-    kom = freelo_service.komentare(task_id)
-    return render_template("ukol_detail.html", u=detail, firma=firma, reseni=reseni, komentare=kom)
+    return render_template("ukol_detail.html", u=detail, firma=firma, reseni=reseni,
+                           komentare=detail.get("komentare", []))
 
 
 @bp.route("/operativa/ukol/<int:task_id>/prirad", methods=["POST"])
