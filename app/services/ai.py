@@ -50,6 +50,51 @@ def test_volani():
             "zkousene": MODELY, "vystup": txt, "chyba": chyba}
 
 
+def _parse_json(raw):
+    import json
+    import re
+    if not raw:
+        return None
+    t = re.sub(r"^```(json)?\s*", "", raw.strip())
+    t = re.sub(r"\s*```$", "", t).strip()
+    try:
+        return json.loads(t)
+    except Exception:
+        m = re.search(r"\[[\s\S]*\]", t)
+        if m:
+            try:
+                return json.loads(re.sub(r",(\s*[}\]])", r"\1", m.group()))
+            except Exception:
+                return None
+    return None
+
+
+def navrhni_ukoly(firma, text):
+    """Z textu (zápis/dokument) navrhne konkrétní úkoly. Vrací {ukoly:[{nazev,popis,termin}], chyba}."""
+    text = (text or "").strip()
+    if not text:
+        return {"ukoly": [], "chyba": "Prázdný text."}
+    if not ma_ai():
+        return {"ukoly": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
+    system = ("Jsi asistent poradenské firmy Commarec. Z dodaného textu (zápis z jednání, dokument) "
+              "vytáhni KONKRÉTNÍ akční úkoly k zadání. Vrať POUZE JSON pole objektů ve tvaru "
+              '[{"nazev":"krátký název úkolu","popis":"1–2 věty co udělat","termin":"YYYY-MM-DD nebo null"}]. '
+              "Žádný další text. Pokud termín není v podkladu, dej null. Maximálně 15 úkolů, jen reálné akce.")
+    odp, chyba = _claude(system, f"Klient: {firma.nazev}\n\nText:\n{text[:12000]}", max_tokens=2000)
+    if not odp:
+        return {"ukoly": [], "chyba": f"AI chyba: {chyba}"}
+    data = _parse_json(odp)
+    if not isinstance(data, list):
+        return {"ukoly": [], "chyba": "AI nevrátila platný seznam úkolů."}
+    ukoly = []
+    for u in data:
+        if isinstance(u, dict) and u.get("nazev"):
+            ukoly.append({"nazev": str(u.get("nazev"))[:200],
+                          "popis": str(u.get("popis") or "")[:1000],
+                          "termin": (u.get("termin") or "")[:10] if u.get("termin") else ""})
+    return {"ukoly": ukoly, "chyba": None}
+
+
 def _freelo_kontext(firma):
     """Textový souhrn úkolů klienta z Freela (pro AI) + zda jsou nějaké."""
     from . import freelo

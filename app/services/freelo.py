@@ -346,6 +346,43 @@ def pridej_komentar(task_id, text, auth=None):
         return False
 
 
+def project_id_pro_tasklist(tasklist_id):
+    """Najde ID projektu, do kterého patří daný tasklist."""
+    if not tasklist_id:
+        return None
+    for p in projekty_s_tasklisty():
+        for tl in p.get("tasklisty", []):
+            if str(tl.get("id")) == str(tasklist_id):
+                return p.get("id")
+    return None
+
+
+def vytvor_ukol(tasklist_id, nazev, popis="", worker_id=None, termin=None, auth=None):
+    """Vytvoří úkol v tasklistu klienta. termin = 'YYYY-MM-DD' nebo None. Vrací (ok, info)."""
+    pid = project_id_pro_tasklist(tasklist_id)
+    if not pid:
+        return False, "projekt nenalezen"
+    telo = {"name": nazev}
+    if popis:
+        telo["comment"] = {"content": popis}
+    if worker_id:
+        try:
+            telo["worker"] = int(worker_id)
+        except (ValueError, TypeError):
+            pass
+    if termin:
+        telo["due_date"] = f"{termin[:10]}T09:00:00"
+    try:
+        r = requests.post(f"{BASE}/project/{pid}/tasklist/{tasklist_id}/tasks",
+                          auth=_auth(auth), headers=_hlavicky(), json=telo, timeout=TIMEOUT)
+        if r.status_code in (200, 201):
+            _CACHE.clear()
+            return True, "ok"
+        return False, f"{r.status_code}: {(r.text or '')[:150]}"
+    except Exception as e:
+        return False, str(e)
+
+
 def _id_ukolu_z_komentare(c):
     """Z komentáře (z /all-comments) vytáhne ID úkolu, ať je reference kdekoli."""
     for kandidat in (c.get("task_id"),

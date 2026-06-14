@@ -126,7 +126,7 @@ from ..auth import (login_required, klient_required, zakazky_required,
 from ..services import (clockify, firmy as firmy_service, snapshot,
                         freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service,
                         dokumenty as dokumenty_service, ai as ai_service,
-                        embeddings as embeddings_service)
+                        embeddings as embeddings_service, extrakce as extrakce_service)
 
 bp = Blueprint("main", __name__)
 
@@ -748,6 +748,46 @@ def operativa_chat(id):
     dotaz = (request.get_json(silent=True) or {}).get("dotaz", "")
     vysledek = ai_service.odpoved_na_dotaz(firma, dotaz)
     return jsonify(vysledek)
+
+
+@bp.route("/operativa/<int:id>/navrh-ukolu", methods=["POST"])
+@login_required
+def operativa_navrh_ukolu(id):
+    firma = Firma.query.get_or_404(id)
+    text = (request.form.get("text") or "").strip()
+    soubor = request.files.get("soubor")
+    if soubor and soubor.filename:
+        data = soubor.read()
+        vytazeno = (extrakce_service.extrahuj_text(data, soubor.filename) or "").strip()
+        text = vytazeno or text
+    vysledek = ai_service.navrhni_ukoly(firma, text)
+    reseni = []
+    pid = freelo_service.project_id_pro_tasklist(firma.freelo_tasklist_id)
+    if pid:
+        reseni = freelo_service.workers(pid)
+    return jsonify({**vysledek, "reseni": reseni})
+
+
+@bp.route("/operativa/<int:id>/vytvor-ukoly", methods=["POST"])
+@login_required
+def operativa_vytvor_ukoly(id):
+    firma = Firma.query.get_or_404(id)
+    if not firma.freelo_tasklist_id:
+        return jsonify({"vytvoreno": 0, "chyby": ["Klient nemá napojené Freelo."]})
+    data = request.get_json(silent=True) or {}
+    auth = _moje_freelo()
+    vytvoreno, chyby = 0, []
+    for u in data.get("ukoly", []):
+        if not u.get("nazev"):
+            continue
+        ok, info = freelo_service.vytvor_ukol(firma.freelo_tasklist_id, u.get("nazev", ""),
+                                              u.get("popis", ""), u.get("worker_id"),
+                                              u.get("termin"), auth=auth)
+        if ok:
+            vytvoreno += 1
+        else:
+            chyby.append(f"{u.get('nazev', '?')}: {info}")
+    return jsonify({"vytvoreno": vytvoreno, "chyby": chyby})
 
 
 @bp.route("/operativa/<int:id>/index-dokumenty", methods=["POST"])

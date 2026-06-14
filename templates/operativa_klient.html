@@ -5,22 +5,37 @@
 
 <!-- AI asistent (chat nad dokumenty + Freelo) -->
 <style>
-  .chat{background:var(--navy-dark);border-radius:12px;padding:14px 16px;margin-bottom:22px;color:#dde5f0}
+  .chat{background:var(--navy-dark);border-radius:14px;padding:16px 18px;margin-bottom:22px;color:#dde5f0}
   .chat .hd{display:flex;align-items:center;gap:8px;color:var(--cyan);font-weight:700;font-size:13px;
-    text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
-  .chat .okno{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
-  .chat .q{align-self:flex-end;background:var(--cyan);color:#fff;padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:85%;font-size:14px}
-  .chat .a{align-self:flex-start;background:#1c3357;color:#eaf1fb;padding:10px 13px;border-radius:12px 12px 12px 2px;max-width:92%;font-size:14px;line-height:1.55;white-space:pre-wrap}
-  .chat .a .zdroje{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
-  .chat .a .zdroje a{background:#0e213e;color:var(--cyan);padding:2px 9px;border-radius:20px;font-size:11px;text-decoration:none}
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+  .chat .okno{min-height:280px;max-height:65vh;overflow:auto;display:flex;flex-direction:column;gap:12px;margin-bottom:12px;padding-right:4px}
+  .chat .q{align-self:flex-end;background:var(--cyan);color:#fff;padding:9px 13px;border-radius:13px 13px 3px 13px;max-width:80%;font-size:14px;line-height:1.5}
+  .chat .a{align-self:flex-start;background:#fff;color:#16263f;padding:13px 16px;border-radius:13px 13px 13px 3px;max-width:94%;font-size:14px;line-height:1.6;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  /* markdown uvnitř odpovědi */
+  .chat .a h1,.chat .a h2,.chat .a h3{font-family:'Montserrat',sans-serif;color:var(--navy);margin:12px 0 6px;line-height:1.25}
+  .chat .a h1{font-size:18px} .chat .a h2{font-size:16px} .chat .a h3{font-size:14px;text-transform:uppercase;letter-spacing:.03em;color:var(--cyan-dark)}
+  .chat .a h1:first-child,.chat .a h2:first-child,.chat .a h3:first-child{margin-top:0}
+  .chat .a p{margin:6px 0} .chat .a ul,.chat .a ol{margin:6px 0 6px 18px} .chat .a li{margin:3px 0}
+  .chat .a strong{color:var(--navy)} .chat .a code{background:#eef1f6;padding:1px 5px;border-radius:4px;font-size:13px}
+  .chat .a table{border-collapse:collapse;margin:8px 0;font-size:13px} .chat .a th,.chat .a td{border:1px solid #d4dbe6;padding:5px 8px}
+  .chat .a a{color:var(--cyan-dark)}
+  .chat .a .zdroje{margin-top:10px;padding-top:8px;border-top:1px solid #e6eaf0;display:flex;gap:6px;flex-wrap:wrap}
+  .chat .a .zdroje a{background:#eef0ff;color:#3b4cca;padding:3px 10px;border-radius:20px;font-size:11px;text-decoration:none}
   .chat .vstup{display:flex;gap:8px}
-  .chat input{flex:1;padding:10px 12px;border:none;border-radius:8px;font-family:inherit;font-size:14px}
+  .chat input{flex:1;padding:11px 13px;border:none;border-radius:9px;font-family:inherit;font-size:14px}
   .chat .hint{color:#8aa0c0;font-size:12px;margin-top:6px}
+  .chat .pill{background:rgba(255,255,255,.08);color:#cfe; border:1px solid rgba(255,255,255,.15);
+    padding:6px 11px;border-radius:20px;font-size:12px;cursor:pointer}
+  .chat .pill:hover{background:rgba(0,175,240,.25)}
 </style>
 <div class="chat">
   <div class="hd">✦ Zeptej se na klienta {{ firma.nazev }}</div>
   <div class="okno" id="chatOkno">
-    <div class="a">Ptej se na cokoli z dokumentů i z úkolů ve Freelu — např. „co teď řešíme?", „co je po termínu?", „jaký je finální layout skladu?". Odpovím a doložím zdroje.</div>
+    <div class="a">Ptej se na cokoli z dokumentů i z úkolů ve Freelu. Odpovím a doložím zdroje.</div>
+  </div>
+  <div id="chatPilulky" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    {% for p in ['Shrň aktuální stav klienta','Co je po termínu a u koho?','Na co si dát pozor / rizika?','Co bylo dohodnuto na posledních jednáních?'] %}
+    <span class="pill" data-q="{{ p }}">{{ p }}</span>{% endfor %}
   </div>
   <form class="vstup" id="chatForm">
     <input type="text" id="chatVstup" placeholder="Napiš dotaz…" autocomplete="off"{{ ' disabled' if not ai_ok }}>
@@ -28,24 +43,117 @@
   </form>
   {% if not ai_ok %}<div class="hint">AI zatím není aktivní — doplň firemní ANTHROPIC_API_KEY na Railway.</div>{% endif %}
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 (function(){
   const form=document.getElementById('chatForm'), vst=document.getElementById('chatVstup'), okno=document.getElementById('chatOkno');
   if(!form) return;
   const URL="{{ url_for('main.operativa_chat', id=firma.id) }}", CSRF="{{ csrf_token() }}";
-  function bublina(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;okno.appendChild(d);okno.scrollTop=okno.scrollHeight;return d;}
+  const md=(t)=>{try{return window.marked?marked.parse(t||''):esc(t);}catch(e){return esc(t);}};
   function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
-  form.addEventListener('submit',async e=>{
-    e.preventDefault(); const q=vst.value.trim(); if(!q) return;
-    bublina('q',esc(q)); vst.value=''; const a=bublina('a','…');
+  function bublinaQ(t){const d=document.createElement('div');d.className='q';d.textContent=t;okno.appendChild(d);okno.scrollTop=okno.scrollHeight;}
+  function bublinaA(){const d=document.createElement('div');d.className='a';d.textContent='…';okno.appendChild(d);okno.scrollTop=okno.scrollHeight;return d;}
+  async function zeptej(q){
+    if(!q) return; bublinaQ(q); const a=bublinaA();
     try{
       const r=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({dotaz:q})});
       const j=await r.json();
-      let html=esc(j.odpoved||j.chyba||'Bez odpovědi.');
+      let html=md(j.odpoved||j.chyba||'Bez odpovědi.');
       if(j.zdroje&&j.zdroje.length){html+='<div class="zdroje">'+j.zdroje.map(z=>'<a href="'+(z.web_url||'#')+'" target="_blank">📄 '+esc(z.nazev)+'</a>').join('')+'</div>';}
       a.innerHTML=html;
     }catch(err){a.textContent='Chyba spojení.';}
     okno.scrollTop=okno.scrollHeight;
+  }
+  form.addEventListener('submit',e=>{e.preventDefault();const q=vst.value.trim();vst.value='';zeptej(q);});
+  document.querySelectorAll('#chatPilulky .pill').forEach(p=>p.addEventListener('click',()=>zeptej(p.dataset.q)));
+})();
+</script>
+
+<!-- Z dokumentu udělej úkoly do Freela -->
+{% set istyl2 = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+<details class="sek" style="margin-bottom:18px">
+  <summary>✦ Z dokumentu udělej úkoly do Freela <span class="si">nahraj zápis / vlož text</span></summary>
+  <div class="telo">
+    <p class="muted" style="font-size:13px;margin:8px 0 10px">Nahraj dokument (zápis) nebo vlož text. AI navrhne úkoly, ty je projdeš a vybrané pošleš do Freela.</p>
+    <form id="navrhForm" style="display:flex;flex-direction:column;gap:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="soubor" accept=".pdf,.docx,.xlsx,.pptx,.txt" style="font-size:13px">
+      <textarea name="text" rows="4" placeholder="…nebo sem vlož text zápisu" style="{{ istyl2 }};resize:vertical"></textarea>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn" type="submit"{{ ' disabled' if not ai_ok }}>Navrhni úkoly</button>
+        <span id="navrhStav" class="muted" style="font-size:13px"></span>
+      </div>
+    </form>
+  </div>
+</details>
+
+<!-- Modal k revizi úkolů -->
+<div id="ukolyModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:86vh;overflow:auto;padding:20px 22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 class="druk" style="color:var(--navy);font-size:18px;margin:0">Navržené úkoly — vyber a uprav</h3>
+      <button type="button" id="modalZavri" style="border:none;background:none;font-size:24px;cursor:pointer;color:#889">×</button>
+    </div>
+    <div id="ukolySeznam"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+      <button type="button" class="btn btn-ghost" id="modalZrusit">Zrušit</button>
+      <button type="button" class="btn" id="odeslatUkoly">Odeslat vybrané do Freela</button>
+    </div>
+    <div id="ukolyVysledek" style="font-size:13px;margin-top:10px"></div>
+  </div>
+</div>
+<script>
+(function(){
+  const form=document.getElementById('navrhForm'); if(!form) return;
+  const URLN="{{ url_for('main.operativa_navrh_ukolu', id=firma.id) }}";
+  const URLV="{{ url_for('main.operativa_vytvor_ukoly', id=firma.id) }}";
+  const CSRF="{{ csrf_token() }}";
+  const modal=document.getElementById('ukolyModal'), seznam=document.getElementById('ukolySeznam'),
+        stav=document.getElementById('navrhStav'), vysl=document.getElementById('ukolyVysledek');
+  let RESENI=[];
+  const istyl="padding:7px 9px;border:1px solid var(--n7);border-radius:7px;font-family:inherit;font-size:13px";
+  function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function zavri(){modal.style.display='none';}
+  document.getElementById('modalZavri').onclick=zavri;
+  document.getElementById('modalZrusit').onclick=zavri;
+  function optReseni(){return '<option value="">— bez řešitele —</option>'+RESENI.map(r=>'<option value="'+r[0]+'">'+esc(r[1])+'</option>').join('');}
+  function radek(u){
+    return '<div class="urow-ai" style="border:1px solid var(--n8);border-radius:9px;padding:10px 12px;margin-bottom:8px">'
+      +'<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" class="u-ch" checked style="margin-top:4px">'
+      +'<input class="u-nazev" value="'+esc(u.nazev)+'" style="'+istyl+';flex:1;font-weight:600"></label>'
+      +'<textarea class="u-popis" rows="2" style="'+istyl+';width:100%;margin-top:8px;resize:vertical">'+esc(u.popis||'')+'</textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><select class="u-res" style="'+istyl+';flex:1;min-width:160px">'+optReseni()+'</select>'
+      +'<input type="date" class="u-termin" value="'+esc(u.termin||'')+'" style="'+istyl+'"></div></div>';
+  }
+  form.addEventListener('submit',async e=>{
+    e.preventDefault(); stav.textContent='AI navrhuje úkoly…';
+    try{
+      const fd=new FormData(form);
+      const r=await fetch(URLN,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd});
+      const j=await r.json(); stav.textContent='';
+      if(j.chyba){stav.textContent=j.chyba;return;}
+      if(!j.ukoly||!j.ukoly.length){stav.textContent='AI nenašla žádné úkoly.';return;}
+      RESENI=j.reseni||[]; seznam.innerHTML=j.ukoly.map(radek).join(''); vysl.textContent='';
+      modal.style.display='flex';
+    }catch(err){stav.textContent='Chyba spojení.';}
+  });
+  document.getElementById('odeslatUkoly').addEventListener('click',async ()=>{
+    const ukoly=[];
+    seznam.querySelectorAll('.urow-ai').forEach(row=>{
+      if(!row.querySelector('.u-ch').checked) return;
+      ukoly.push({nazev:row.querySelector('.u-nazev').value.trim(),
+                  popis:row.querySelector('.u-popis').value.trim(),
+                  worker_id:row.querySelector('.u-res').value,
+                  termin:row.querySelector('.u-termin').value});
+    });
+    if(!ukoly.length){vysl.textContent='Nevybral jsi žádný úkol.';return;}
+    vysl.textContent='Odesílám…';
+    try{
+      const r=await fetch(URLV,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({ukoly})});
+      const j=await r.json();
+      vysl.style.color=j.chyby&&j.chyby.length?'var(--orange)':'var(--green)';
+      vysl.textContent='Vytvořeno '+j.vytvoreno+' úkolů.'+(j.chyby&&j.chyby.length?' Chyby: '+j.chyby.join('; '):'');
+    }catch(err){vysl.style.color='var(--red)';vysl.textContent='Chyba spojení.';}
   });
 })();
 </script>
@@ -85,6 +193,7 @@
   .sek .telo{padding:0 18px 16px}
 </style>
 
+<div class="cols11">
 <!-- Freelo úkoly (sbaleno) -->
 <details class="sek">
   <summary>Freelo úkoly <span class="si">{% if souhrn %}{{ souhrn.open }} otevřených · {{ souhrn.hotovo }} hotových{% else %}klik pro detail{% endif %}</span></summary>
@@ -254,4 +363,5 @@ function naplnTl(){
 {% endif %}
   </div>
 </details>
+</div>
 {% endblock %}
