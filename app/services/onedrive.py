@@ -141,6 +141,55 @@ def vsechny_soubory(odkaz, max_souboru=800, max_hloubka=6):
     return {"drive_id": drive_id, "soubory": out}
 
 
+def slozky(odkaz, max_hloubka=6):
+    """Rekurzivně vrátí seznam složek klienta [{id, cesta}] (vč. kořene '/') pro výběr cíle uploadu."""
+    r = resolve_slozka(odkaz)
+    if not r:
+        return []
+    drive_id, root_id = r
+    out = [{"id": root_id, "cesta": "/ (kořen)"}]
+
+    def _walk(item_id, cesta, hloubka):
+        if hloubka > max_hloubka:
+            return
+        for p in vypis(drive_id, item_id):
+            if p["je_slozka"]:
+                c = f"{cesta}/{p['nazev']}".replace("//", "/")
+                out.append({"id": p["id"], "cesta": c})
+                _walk(p["id"], c, hloubka + 1)
+    _walk(root_id, "", 0)
+    return out
+
+
+def nahraj(odkaz, filename, data, cil_item_id=None):
+    """Nahraje soubor do složky klienta (cil_item_id = podsložka, jinak kořen). Vrací item dict nebo None.
+    Vyžaduje write oprávnění (Sites.ReadWrite.All / Files.ReadWrite.All)."""
+    import urllib.parse
+    if not je_nakonfigurovano() or not odkaz or not filename:
+        return None
+    r = resolve_slozka(odkaz)
+    if not r:
+        return None
+    drive_id, root_id = r
+    cil = cil_item_id or root_id
+    safe = filename.replace("/", "_").replace("\\", "_")
+    try:
+        url = f"{GRAPH}/drives/{drive_id}/items/{cil}:/{urllib.parse.quote(safe)}:/content"
+        resp = requests.put(url, headers={"Authorization": f"Bearer {_token()}",
+                                          "Content-Type": "application/octet-stream"},
+                            data=data, timeout=180)
+        if resp.status_code in (200, 201):
+            for k in list(_CACHE.keys()):  # ať se výpis složky obnoví
+                if k.startswith("vypis:"):
+                    _CACHE.pop(k, None)
+            return resp.json()
+        print(f"[onedrive] nahraj {resp.status_code}: {resp.text[:200]}")
+        return None
+    except Exception as e:
+        print(f"[onedrive] nahraj: {e}")
+        return None
+
+
 def stahni(drive_id, item_id):
     """Stáhne obsah souboru (bytes) — pro Fázi 2 (extrakce textu pro AI)."""
     if not je_nakonfigurovano():

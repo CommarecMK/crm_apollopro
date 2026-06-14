@@ -70,22 +70,33 @@ def _parse_json(raw):
 
 
 def navrhni_ukoly(firma, text):
-    """Z textu (zápis/dokument) navrhne konkrétní úkoly. Vrací {ukoly:[{nazev,popis,termin}], chyba}."""
+    """Z textu (zápis/dokument/analýza) navrhne konkrétní úkoly + doporučené kroky.
+    Vrací {ukoly:[{nazev,popis,termin}], chyba}."""
     text = (text or "").strip()
-    if not text:
-        return {"ukoly": [], "chyba": "Prázdný text."}
+    if len(text) < 30:
+        return {"ukoly": [], "chyba": "Z dokumentu se nepodařilo přečíst text (možná naskenované PDF/obrázek nebo prázdný soubor). Zkus vložit text ručně."}
     if not ma_ai():
         return {"ukoly": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
-    system = ("Jsi asistent poradenské firmy Commarec. Z dodaného textu (zápis z jednání, dokument) "
-              "vytáhni KONKRÉTNÍ akční úkoly k zadání. Vrať POUZE JSON pole objektů ve tvaru "
-              '[{"nazev":"krátký název úkolu","popis":"1–2 věty co udělat","termin":"YYYY-MM-DD nebo null"}]. '
-              "Žádný další text. Pokud termín není v podkladu, dej null. Maximálně 15 úkolů, jen reálné akce.")
-    odp, chyba = _claude(system, f"Klient: {firma.nazev}\n\nText:\n{text[:12000]}", max_tokens=2000)
+    # kontext klienta (otevřené úkoly) — ať nenavrhuje duplicity a je v obraze
+    freelo_ctx = _freelo_kontext(firma)
+    system = ("Jsi zkušený projektový konzultant logistiky ve firmě Commarec. Z dodaného dokumentu "
+              "(zápis z jednání, analýza dat, report, nabídka) navrhni KONKRÉTNÍ úkoly a doporučené další kroky "
+              "pro klienta. Buď chytrý a proaktivní: i z analytického/datového dokumentu odvoď smysluplné akce "
+              "(např. ověřit kapacitu regálů dle dat, připravit návrh layoutu, doplnit chybějící podklad). "
+              "Nevymýšlej si fakta. Vyhni se úkolům, které už jsou mezi otevřenými. "
+              "Vrať POUZE JSON pole objektů ve tvaru "
+              '[{"nazev":"krátký název","popis":"1–2 věty co a proč udělat","termin":"YYYY-MM-DD nebo null"}]. '
+              "Žádný jiný text. Max 15 úkolů, jen reálné akce. Pokud opravdu nic akčního není, vrať [].")
+    user = f"Klient: {firma.nazev}\n\n"
+    if freelo_ctx:
+        user += f"Už otevřené úkoly (nenavrhuj duplicity):\n{freelo_ctx[:2000]}\n\n"
+    user += f"Dokument:\n{text[:14000]}"
+    odp, chyba = _claude(system, user, max_tokens=2500)
     if not odp:
         return {"ukoly": [], "chyba": f"AI chyba: {chyba}"}
     data = _parse_json(odp)
     if not isinstance(data, list):
-        return {"ukoly": [], "chyba": "AI nevrátila platný seznam úkolů."}
+        return {"ukoly": [], "chyba": "AI nevrátila platný seznam úkolů. Zkus to prosím znovu."}
     ukoly = []
     for u in data:
         if isinstance(u, dict) and u.get("nazev"):
@@ -93,6 +104,20 @@ def navrhni_ukoly(firma, text):
                           "popis": str(u.get("popis") or "")[:1000],
                           "termin": (u.get("termin") or "")[:10] if u.get("termin") else ""})
     return {"ukoly": ukoly, "chyba": None}
+
+
+def navrhni_slozku(filename, cesty):
+    """Navrhne, do které složky (z `cesty`) soubor patří. Vrací cestu (str) nebo ''."""
+    if not filename or not cesty:
+        return ""
+    if not ma_ai():
+        return ""
+    seznam = "\n".join(cesty[:80])
+    system = ("Vyber NEJVHODNĚJŠÍ složku pro daný soubor podle jeho názvu. "
+              "Odpověz POUZE přesnou cestou složky ze seznamu, nic jiného. Když si nejsi jistý, vrať '/ (kořen)'.")
+    odp, _ = _claude(system, f"Soubor: {filename}\n\nSložky:\n{seznam}", max_tokens=60)
+    odp = (odp or "").strip().splitlines()[0].strip() if odp else ""
+    return odp if odp in cesty else ""
 
 
 def _freelo_kontext(firma):
@@ -141,14 +166,24 @@ def odpoved_na_dotaz(firma, dotaz):
     system = ("Jsi asistent poradenské firmy Commarec. Odpovídej česky, věcně a stručně. "
               "Vycházej VÝHRADNĚ z poskytnutých podkladů (úkoly z Freela + úryvky z dokumentů klienta). "
               "Můžeš kombinovat obojí. Pokud odpověď v podkladech není, jasně to napiš. "
-              "U klíčových tvrzení z dokumentů odkazuj na zdroj (název souboru).")
+              "U klíčových tvrzení z dokumentů odkazuj na zdroj (název souboru). "
+              "Na úplný konec přidej na samostatný řádek oddělovač '===NAVRHY===' a pod něj 3 stručné "
+              "návazné otázky (každou na svůj řádek, bez číslování), které dávají smysl k prohloubení tématu u tohoto klienta.")
     user = f"Klient: {firma.nazev}\n\nDotaz: {dotaz}\n\n" + "\n\n".join(casti)
-    odp, chyba = _claude(system, user)
+    odp, chyba = _claude(system, user, max_tokens=1800)
     if not odp:
-        return {"odpoved": None, "zdroje": [], "chyba": f"AI se nepodařilo zavolat: {chyba or 'neznámá chyba'}"}
+        return {"odpoved": None, "zdroje": [], "navrhy": [], "chyba": f"AI se nepodařilo zavolat: {chyba or 'neznámá chyba'}"}
+    navrhy = []
+    if "===NAVRHY===" in odp:
+        odp, raw = odp.split("===NAVRHY===", 1)
+        for line in raw.strip().splitlines():
+            q = line.strip().lstrip("0123456789.-•* ").strip()
+            if len(q) > 4:
+                navrhy.append(q)
+        odp = odp.strip()
     zdroje, videno = [], set()
     for c in chunky:
         if c["nazev"] not in videno:
             videno.add(c["nazev"])
             zdroje.append({"nazev": c["nazev"], "web_url": c["web_url"]})
-    return {"odpoved": odp, "zdroje": zdroje[:8], "chyba": None}
+    return {"odpoved": odp, "zdroje": zdroje[:8], "navrhy": navrhy[:3], "chyba": None}

@@ -21,6 +21,10 @@
   .chat .a a{color:var(--cyan-dark)}
   .chat .a .zdroje{margin-top:10px;padding-top:8px;border-top:1px solid #e6eaf0;display:flex;gap:6px;flex-wrap:wrap}
   .chat .a .zdroje a{background:#eef0ff;color:#3b4cca;padding:3px 10px;border-radius:20px;font-size:11px;text-decoration:none}
+  .chat .a .navrhy{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+  .chat .a .navrh{background:#eaf6fe;color:var(--cyan-dark);border:1px solid #cde9fb;border-radius:18px;
+    padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;text-align:left}
+  .chat .a .navrh:hover{background:#d6eefc}
   .chat .vstup{display:flex;gap:8px}
   .chat input{flex:1;padding:11px 13px;border:none;border-radius:9px;font-family:inherit;font-size:14px}
   .chat .hint{color:#8aa0c0;font-size:12px;margin-top:6px}
@@ -41,6 +45,7 @@
     <input type="text" id="chatVstup" placeholder="Napiš dotaz…" autocomplete="off"{{ ' disabled' if not ai_ok }}>
     <button class="btn" type="submit"{{ ' disabled' if not ai_ok }}>Odeslat</button>
   </form>
+  <div style="margin-top:8px"><button class="pill" type="button" id="chatDoUkolu" style="display:none">✦ Vytvoř úkoly z poslední odpovědi</button></div>
   {% if not ai_ok %}<div class="hint">AI zatím není aktivní — doplň firemní ANTHROPIC_API_KEY na Railway.</div>{% endif %}
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
@@ -61,11 +66,19 @@
       let html=md(j.odpoved||j.chyba||'Bez odpovědi.');
       if(j.zdroje&&j.zdroje.length){html+='<div class="zdroje">'+j.zdroje.map(z=>'<a href="'+(z.web_url||'#')+'" target="_blank">📄 '+esc(z.nazev)+'</a>').join('')+'</div>';}
       a.innerHTML=html;
+      if(j.navrhy&&j.navrhy.length){
+        const nd=document.createElement('div'); nd.className='navrhy';
+        j.navrhy.forEach(q=>{const b=document.createElement('button');b.type='button';b.className='navrh';b.textContent='↳ '+q;b.addEventListener('click',()=>zeptej(q));nd.appendChild(b);});
+        a.appendChild(nd);
+      }
+      if(j.odpoved){window._posledniAI=j.odpoved; const b=document.getElementById('chatDoUkolu'); if(b) b.style.display='inline-block';}
     }catch(err){a.textContent='Chyba spojení.';}
     okno.scrollTop=okno.scrollHeight;
   }
   form.addEventListener('submit',e=>{e.preventDefault();const q=vst.value.trim();vst.value='';zeptej(q);});
   document.querySelectorAll('#chatPilulky .pill').forEach(p=>p.addEventListener('click',()=>zeptej(p.dataset.q)));
+  const doU=document.getElementById('chatDoUkolu');
+  if(doU) doU.addEventListener('click',()=>{ if(window._posledniAI && window.navrhZText) window.navrhZText(window._posledniAI); });
 })();
 </script>
 
@@ -125,18 +138,19 @@
       +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><select class="u-res" style="'+istyl+';flex:1;min-width:160px">'+optReseni()+'</select>'
       +'<input type="date" class="u-termin" value="'+esc(u.termin||'')+'" style="'+istyl+'"></div></div>';
   }
-  form.addEventListener('submit',async e=>{
-    e.preventDefault(); stav.textContent='AI navrhuje úkoly…';
+  async function spustNavrh(fd, stavEl){
+    if(stavEl) stavEl.textContent='AI navrhuje úkoly…';
     try{
-      const fd=new FormData(form);
       const r=await fetch(URLN,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd});
-      const j=await r.json(); stav.textContent='';
-      if(j.chyba){stav.textContent=j.chyba;return;}
-      if(!j.ukoly||!j.ukoly.length){stav.textContent='AI nenašla žádné úkoly.';return;}
+      const j=await r.json(); if(stavEl) stavEl.textContent='';
+      if(j.chyba){ if(stavEl) stavEl.textContent=j.chyba; else alert(j.chyba); return; }
+      if(!j.ukoly||!j.ukoly.length){ const m='AI nenašla žádné úkoly.'; if(stavEl) stavEl.textContent=m; else alert(m); return; }
       RESENI=j.reseni||[]; seznam.innerHTML=j.ukoly.map(radek).join(''); vysl.textContent='';
       modal.style.display='flex';
-    }catch(err){stav.textContent='Chyba spojení.';}
-  });
+    }catch(err){ if(stavEl) stavEl.textContent='Chyba spojení.'; }
+  }
+  form.addEventListener('submit',e=>{e.preventDefault();spustNavrh(new FormData(form),stav);});
+  window.navrhZText=function(t){ if(!t) return; const fd=new FormData(); fd.append('text',t); fd.append('csrf_token',CSRF); spustNavrh(fd,null); };
   document.getElementById('odeslatUkoly').addEventListener('click',async ()=>{
     const ukoly=[];
     seznam.querySelectorAll('.urow-ai').forEach(row=>{
@@ -333,6 +347,29 @@ function naplnTl(){
       <button class="btn" type="submit">⬇ {{ 'Aktualizovat databázi' if idx_pocet else 'Načíst dokumenty do databáze' }}</button>
     </form>
     {% endif %}
+    <form method="post" action="{{ url_for('main.operativa_nahraj_soubor', id=firma.id) }}" enctype="multipart/form-data" id="uploadForm" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="soubor" id="uplSoubor" required style="font-size:12px;max-width:150px">
+      <select name="slozka_id" id="cilSlozka" style="font-size:12px;padding:5px 7px;border:1px solid var(--n7);border-radius:7px;max-width:170px">
+        <option value="">/ (kořen)</option>
+      </select>
+      <button class="btn btn-ghost" type="button" id="aiSlozka" style="font-size:12px;padding:6px 10px">AI: kam?</button>
+      <button class="btn btn-ghost" type="submit" style="font-size:12px;padding:6px 12px">Nahrát</button>
+    </form>
+    <script>
+    (function(){
+      const sel=document.getElementById('cilSlozka'); if(!sel) return;
+      let SL=[];
+      fetch("{{ url_for('main.operativa_slozky', id=firma.id) }}").then(r=>r.json()).then(j=>{
+        SL=j.slozky||[]; SL.forEach(s=>{if(s.cesta==='/ (kořen)')return;const o=document.createElement('option');o.value=s.id;o.textContent=s.cesta;sel.appendChild(o);});
+      }).catch(()=>{});
+      document.getElementById('aiSlozka').addEventListener('click',async ()=>{
+        const f=document.getElementById('uplSoubor').files[0]; if(!f){alert('Nejdřív vyber soubor.');return;}
+        const r=await fetch("{{ url_for('main.operativa_navrh_slozku', id=firma.id) }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token() }}'},body:JSON.stringify({soubor:f.name})});
+        const j=await r.json(); const s=(SL.find(x=>x.cesta===j.navrh)); if(s){sel.value=s.id;} else {alert('AI nenavrhla konkrétní složku — necháno na kořeni.');}
+      });
+    })();
+    </script>
     {% if smi_klient() %}
     <form method="post" action="{{ url_for('main.operativa_onedrive', id=firma.id) }}" style="display:inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="odkaz" value="">

@@ -808,6 +808,50 @@ def operativa_index_dokumenty(id):
     return redirect(url_for("main.operativa_klient", id=id))
 
 
+@bp.route("/operativa/<int:id>/nahraj-soubor", methods=["POST"])
+@login_required
+def operativa_nahraj_soubor(id):
+    firma = Firma.query.get_or_404(id)
+    soubor = request.files.get("soubor")
+    cil = request.form.get("slozka_id") or None
+    if not firma.onedrive_odkaz:
+        flash("Klient nemá napojenou OneDrive složku.", "error")
+    elif not soubor or not soubor.filename:
+        flash("Nevybral jsi soubor.", "error")
+    else:
+        data = soubor.read()
+        item = onedrive_service.nahraj(firma.onedrive_odkaz, soubor.filename, data, cil)
+        if item:
+            zaindex = False
+            try:
+                zaindex = dokumenty_service.zaindexuj_jeden(firma, item, data)
+            except Exception as e:
+                print(f"[upload index] {e}")
+            flash(f"Soubor {soubor.filename} nahrán" +
+                  (" a zařazen do databáze (hledání + AI)." if zaindex else " (tento typ se neindexuje)."), "info")
+        else:
+            flash("Nahrání selhalo (ověř write oprávnění v Azure).", "error")
+    return redirect(url_for("main.operativa_klient", id=id))
+
+
+@bp.route("/operativa/<int:id>/slozky")
+@login_required
+def operativa_slozky(id):
+    firma = Firma.query.get_or_404(id)
+    slozky = onedrive_service.slozky(firma.onedrive_odkaz) if firma.onedrive_odkaz else []
+    return jsonify({"slozky": slozky})
+
+
+@bp.route("/operativa/<int:id>/navrh-slozku", methods=["POST"])
+@login_required
+def operativa_navrh_slozku(id):
+    firma = Firma.query.get_or_404(id)
+    filename = (request.get_json(silent=True) or {}).get("soubor", "")
+    slozky = onedrive_service.slozky(firma.onedrive_odkaz) if firma.onedrive_odkaz else []
+    navrh = ai_service.navrhni_slozku(filename, [s["cesta"] for s in slozky])
+    return jsonify({"navrh": navrh})
+
+
 @bp.route("/operativa/<int:id>/index-reset", methods=["POST"])
 @login_required
 def operativa_index_reset(id):

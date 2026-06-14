@@ -61,6 +61,31 @@ def index_klienta(firma):
     return indexovano, len(soubory), None
 
 
+def zaindexuj_jeden(firma, item, data):
+    """Zaindexuje jeden (právě nahraný) soubor do DB. item = Graph item dict. Vrací True/False."""
+    from datetime import datetime, timezone
+    from ..models import KlientDokument
+    nazev = item.get("name", "")
+    if not extrakce.lze_extrahovat(nazev):
+        return False
+    text = extrakce.extrahuj_text(data, nazev) or ""
+    d = KlientDokument.query.filter_by(firma_id=firma.id, item_id=item.get("id")).first() \
+        or KlientDokument(firma_id=firma.id, item_id=item.get("id"))
+    d.drive_id = (item.get("parentReference") or {}).get("driveId")
+    d.nazev = nazev
+    d.cesta = ((item.get("parentReference") or {}).get("path") or "").split("root:")[-1].strip("/")
+    d.web_url = item.get("webUrl", "")
+    d.velikost = item.get("size") or 0
+    d.text = text
+    d.updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    d.soubor_zmeneno = (item.get("lastModifiedDateTime") or "")[:19]
+    db.session.add(d)
+    db.session.flush()
+    embeddings.reindex_dokument(d)
+    db.session.commit()
+    return True
+
+
 def index_klienta_async(app, firma_id):
     """Spustí indexaci na pozadí (mimo webový request) — nastaví/sundá příznak běhu."""
     from ..models import Firma
