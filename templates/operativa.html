@@ -3,6 +3,12 @@
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Operativa</h1>
 <p class="muted" style="margin-bottom:18px">Klienti — úkoly, dokumenty, zápisy, LOE</p>
 
+{% if snapshot_chybi %}
+<div class="note" style="border-left-color:var(--orange)">
+  Data úkolů z Freela zatím nejsou načtená. Otevři <b>⚙ Admin → Obnovit data</b> (jednorázově to chvíli trvá), pak bude operativa okamžitá.
+</div>
+{% endif %}
+
 {% if dash.napojeno %}
 <!-- Dashboard všech úkolů (napojení klienti) -->
 <div class="stats" style="margin-bottom:14px">

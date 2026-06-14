@@ -642,13 +642,17 @@ def operativa():
         q = q.filter(Firma.nazev.ilike(f"%{hledat}%"))
     seznam = q.order_by(Firma.nazev).all()
 
-    # Dashboard + souhrny z Freela přes VŠECHNY napojené klienty (nezávisle na filtru)
+    # Dashboard + souhrny VÝHRADNĚ ze snapshotu (agregace nikdy nesahá živě → rychlé)
     souhrny, top_overdue = {}, []
     dash = {"open": 0, "bez_reakce": 0, "po_terminu": 0, "max_zpozdeni": 0, "napojeno": 0}
-    if freelo_service.je_nakonfigurovano():
+    snap_data, fre_updated = snapshot_freelo.nacti()
+    snapshot_chybi = freelo_service.je_nakonfigurovano() and not (snap_data.get("tasklisty"))
+    if snap_data.get("tasklisty"):
         napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
         for f in napojene:
-            s = freelo_service.souhrn_tasklistu(f.freelo_tasklist_id)
+            s = freelo_service.souhrn_tasklistu(f.freelo_tasklist_id, jen_snapshot=True)
+            if not s["open"] and not s["hotovo"]:
+                continue
             souhrny[f.id] = s
             dash["open"] += s["open"]
             dash["bez_reakce"] += s["bez_reakce"]
@@ -661,7 +665,8 @@ def operativa():
         top_overdue = top_overdue[:8]
     return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita,
                            souhrny=souhrny, dash=dash, top_overdue=top_overdue,
-                           freelo_ok=freelo_service.je_nakonfigurovano())
+                           freelo_ok=freelo_service.je_nakonfigurovano(),
+                           snapshot_chybi=snapshot_chybi, fre_updated=fre_updated)
 
 
 @bp.route("/operativa/resitele")

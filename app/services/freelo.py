@@ -378,8 +378,9 @@ def ukoly_raw(tasklist_id, mapa=None):
     return {"aktivni": aktivni, "hotove": hotove, "open_count": len(aktivni)}
 
 
-def ukoly_klienta(tasklist_id):
-    """Úkoly tasklistu. Přednostně ze snapshotu (rychlé, přesné), jinak živě s cache."""
+def ukoly_klienta(tasklist_id, jen_snapshot=False):
+    """Úkoly tasklistu. Přednostně ze snapshotu (rychlé, přesné).
+    jen_snapshot=True → nikdy nesahá živě (pro agregační stránky, ať se nesekají)."""
     prazdny = {"aktivni": [], "hotove": [], "open_count": 0}
     if not tasklist_id:
         return prazdny
@@ -391,9 +392,9 @@ def ukoly_klienta(tasklist_id):
             return ze_snapshotu
     except Exception as e:
         print(f"[freelo] snapshot read: {e}")
-    # 2) živě (fallback) s cache
-    if not je_nakonfigurovano():
+    if jen_snapshot or not je_nakonfigurovano():
         return prazdny
+    # 2) živě (jen pro detail jednoho klienta) s cache
     ck = f"ukoly:{tasklist_id}"
     c = _cache_get(ck)
     if c is not None:
@@ -424,7 +425,7 @@ def prehled_resitelu(firmy):
     for fid, nazev, tlid in firmy:
         if not tlid:
             continue
-        data = ukoly_klienta(tlid)
+        data = ukoly_klienta(tlid, jen_snapshot=True)
         for u in data["aktivni"]:
             e = _osoba(u["resitel"] or "— bez řešitele —")
             e["open"] += 1
@@ -447,14 +448,14 @@ def prehled_resitelu(firmy):
     return lide
 
 
-def souhrn_tasklistu(tasklist_id):
+def souhrn_tasklistu(tasklist_id, jen_snapshot=False):
     """Metriky jednoho tasklistu pro dlaždici/dashboard:
     {open, po_terminu, max_zpozdeni, bez_reakce, posledni_reakce, overdue_tasks:[...]}."""
     z = {"open": 0, "po_terminu": 0, "max_zpozdeni": 0, "bez_reakce": 0, "hotovo": 0,
          "posledni_reakce": None, "overdue_tasks": []}
     if not tasklist_id:
         return z
-    data = ukoly_klienta(tasklist_id)
+    data = ukoly_klienta(tasklist_id, jen_snapshot=jen_snapshot)
     dnes = date.today()
     z["open"] = data["open_count"]
     z["hotovo"] = len(data.get("hotove", []))
