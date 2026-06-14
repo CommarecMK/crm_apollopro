@@ -76,6 +76,10 @@
         {% if not f.freelo_tasklist_id %}· <span style="color:#aab">Freelo nenapojeno</span>{% endif %}
       </div>
     {% endif %}
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      {% if f.freelo_tasklist_id %}<span class="tag" style="background:#e7f6fd;color:var(--cyan-dark)">Freelo ✓</span>{% endif %}
+      {% if f.onedrive_odkaz %}<span class="tag" style="background:#eef0ff;color:#3b4cca">OneDrive ✓</span>{% endif %}
+    </div>
   </a>
   {% else %}
   <p class="muted">Žádní klienti.</p>
