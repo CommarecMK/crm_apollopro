@@ -23,6 +23,7 @@ class Firma(db.Model):
     obrat        = db.Column(db.String(80))     # rozsah z MERK
     merk_nacteno = db.Column(db.String(40))    # datum posledního natažení
     projektovy_manazer = db.Column(db.String(120))  # PM klienta (dědí se na zakázky)
+    freelo_tasklist_id = db.Column(db.Integer, nullable=True)  # napojení na Freelo tasklist
     rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
     aktivni      = db.Column(db.Boolean, default=True)     # aktivní / neaktivní klient
 

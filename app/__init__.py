@@ -97,6 +97,7 @@ def _inline_migrace():
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
                 "aktivni": "BOOLEAN DEFAULT TRUE",
                 "projektovy_manazer": "VARCHAR(120)",
+                "freelo_tasklist_id": "INTEGER",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",

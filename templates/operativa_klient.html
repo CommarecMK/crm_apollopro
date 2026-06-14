@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.operativa') }}">← Operativa</a></p>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+  <h1 style="color:var(--navy);font-size:28px;margin:0">{{ firma.nazev }}</h1>
+  <a class="logout" href="{{ url_for('main.firma_detail', id=firma.id) }}" style="color:var(--cyan-dark)">→ Řízení & finance</a>
+</div>
+
+<!-- Freelo úkoly -->
+<h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Freelo úkoly</h2>
+{% if not freelo_ok %}
+<div class="note">Freelo není nakonfigurované (chybí FREELO_EMAIL / FREELO_API_KEY).</div>
+{% elif not firma.freelo_tasklist_id %}
+<div class="stat">
+  <p class="muted" style="font-size:13px;margin-bottom:10px">Napoj klienta na Freelo tasklist:</p>
+  <form method="post" action="{{ url_for('main.operativa_freelo_napojit', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="tasklist_id" style="flex:1;min-width:240px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px">
+      <option value="">— vyber tasklist —</option>
+      {% for tid, popis in tasklisty %}<option value="{{ tid }}">{{ popis }}</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">Napojit</button>
+  </form>
+</div>
+{% else %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span class="muted" style="font-size:13px">{{ ukoly.open_count }} otevřených úkolů</span>
+  <form method="post" action="{{ url_for('main.operativa_freelo_napojit', id=firma.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="tasklist_id" value="">
+    <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">Odpojit Freelo</button>
+  </form>
+</div>
+<table>
+  <thead><tr><th>Úkol</th><th>Řešitel</th><th style="text-align:center">Stav</th></tr></thead>
+  <tbody>
+    {% for u in ukoly.aktivni %}
+    <tr><td><a href="{{ u.url }}" target="_blank">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+      <td style="text-align:center"><span class="dot oranzova"></span>otevřený</td></tr>
+    {% endfor %}
+    {% for u in ukoly.hotove %}
+    <tr style="opacity:.6"><td><a href="{{ u.url }}" target="_blank">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+      <td style="text-align:center"><span class="dot zelena"></span>hotovo</td></tr>
+    {% endfor %}
+    {% if not ukoly.aktivni and not ukoly.hotove %}
+    <tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Žádné úkoly v tomto tasklistu.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Připravované sekce operativy -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px">
+  {% for nazev, popis in [('Dokumenty (OneDrive)','Složky a soubory klienta'),('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy'),('Chat nad klientem','Zeptej se na klienta')] %}
+  <div class="stat" style="opacity:.7">
+    <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
+    <p class="muted" style="font-size:12px">{{ popis }} — <b>Připravujeme</b></p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

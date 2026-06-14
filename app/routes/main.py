@@ -121,7 +121,7 @@ def _jen_interni(q):
     return q.filter(Firma.ico == COMPANY_ICO)
 from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
-from ..services import clockify, firmy as firmy_service, snapshot
+from ..services import clockify, firmy as firmy_service, snapshot, freelo as freelo_service
 
 bp = Blueprint("main", __name__)
 
@@ -195,6 +195,9 @@ def sso_vstup():
     if not u.aktivni:
         return redirect(portal + "/login")
     _prihlas(u)
+    nxt = request.args.get("next", "")
+    if nxt.startswith("/") and not nxt.startswith("//"):
+        return redirect(nxt)
     return redirect(url_for("main.prehled"))
 
 
@@ -581,6 +584,45 @@ def cashflow():
     }
     return render_template("cashflow.html", radky=radky, graf=graf, kpi=kpi,
                            bez_terminu=bez_terminu, updated=updated)
+
+
+# ─── Operativa (klient: úkoly, dokumenty, zápisy, LOE) ─────────────
+@bp.route("/operativa")
+@login_required
+def operativa():
+    hledat = request.args.get("q", "").strip()
+    q = _bez_internich(Firma.query).filter(Firma.aktivni.is_(True))
+    if hledat:
+        q = q.filter(Firma.nazev.ilike(f"%{hledat}%"))
+    seznam = q.order_by(Firma.nazev).all()
+    return render_template("operativa.html", firmy=seznam, hledat=hledat)
+
+
+@bp.route("/operativa/<int:id>")
+@login_required
+def operativa_klient(id):
+    firma = Firma.query.get_or_404(id)
+    ukoly = freelo_service.ukoly_klienta(firma.freelo_tasklist_id)
+    tasklisty = freelo_service.seznam_tasklistu() if not firma.freelo_tasklist_id else []
+    return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
+                           tasklisty=tasklisty, freelo_ok=freelo_service.je_nakonfigurovano())
+
+
+@bp.route("/operativa/<int:id>/freelo", methods=["POST"])
+@login_required
+def operativa_freelo_napojit(id):
+    firma = Firma.query.get_or_404(id)
+    tl = request.form.get("tasklist_id", "").strip()
+    firma.freelo_tasklist_id = int(tl) if tl.isdigit() else None
+    db.session.commit()
+    flash("Freelo tasklist napojen." if firma.freelo_tasklist_id else "Napojení zrušeno.", "info")
+    return redirect(url_for("main.operativa_klient", id=id))
+
+
+@bp.route("/diagnostika/freelo")
+@login_required
+def diagnostika_freelo():
+    return jsonify(freelo_service.diagnostika(request.args.get("tasklist", "")))
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────

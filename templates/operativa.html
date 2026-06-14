@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Operativa</h1>
+<p class="muted" style="margin-bottom:18px">Klienti — úkoly, dokumenty, zápisy, LOE</p>
+
+<form class="filters" method="get" style="margin-bottom:18px">
+  <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat klienta…">
+  <button class="btn" type="submit">Hledat</button>
+  <a class="btn btn-ghost" href="{{ url_for('main.operativa') }}">Zrušit</a>
+</form>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+  {% for f in firmy %}
+  <a href="{{ url_for('main.operativa_klient', id=f.id) }}" class="stat" style="text-decoration:none;color:var(--text);display:block">
+    <div style="font-weight:700;color:var(--navy)">{{ f.nazev }}</div>
+    <div class="muted" style="font-size:12px;margin-top:4px">
+      {{ f.zakazky|length }} zakázek
+      {% if f.freelo_tasklist_id %}· <span style="color:var(--cyan-dark)">Freelo ✓</span>{% endif %}
+    </div>
+  </a>
+  {% else %}
+  <p class="muted">Žádní aktivní klienti.</p>
+  {% endfor %}
+</div>
+{% endblock %}
