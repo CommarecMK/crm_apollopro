@@ -104,6 +104,22 @@ class FreeloSnapshot(db.Model):
     data    = db.Column(db.Text)
 
 
+class KlientDokument(db.Model):
+    """Indexovaný dokument klienta z OneDrive — extrahovaný text + metadata (pro hledání a AI)."""
+    __tablename__ = "klient_dokument"
+    id        = db.Column(db.Integer, primary_key=True)
+    firma_id  = db.Column(db.Integer, db.ForeignKey("firma.id"), nullable=False, index=True)
+    item_id   = db.Column(db.String(255), index=True)   # OneDrive driveItem id
+    drive_id  = db.Column(db.String(255))
+    nazev     = db.Column(db.String(400))
+    cesta     = db.Column(db.String(800))               # podsložka v rámci klienta
+    web_url   = db.Column(db.String(800))
+    velikost  = db.Column(db.Integer, default=0)
+    text      = db.Column(db.Text)                      # extrahovaný text
+    updated   = db.Column(db.String(40))
+    firma     = db.relationship("Firma")
+
+
 class Zakazka(db.Model):
     __tablename__ = "zakazka"
     id          = db.Column(db.Integer, primary_key=True)

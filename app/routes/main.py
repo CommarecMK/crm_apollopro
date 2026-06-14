@@ -124,7 +124,8 @@ def _jen_interni(q):
 from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
 from ..services import (clockify, firmy as firmy_service, snapshot,
-                        freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service)
+                        freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service,
+                        dokumenty as dokumenty_service)
 
 bp = Blueprint("main", __name__)
 
@@ -707,10 +708,35 @@ def operativa_klient(id):
     dok = None
     if onedrive_service.je_nakonfigurovano() and firma.onedrive_odkaz:
         dok = onedrive_service.vypis_slozky_klienta(firma.onedrive_odkaz, request.args.get("slozka"))
+    idx_pocet, idx_updated = dokumenty_service.stav(firma.id)
+    nalezeno = dokumenty_service.hledej(request.args.get("hledat_dok", ""), firma.id) \
+        if request.args.get("hledat_dok") else None
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
                            projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano(),
                            onedrive_ok=onedrive_service.je_nakonfigurovano(), dok=dok,
-                           podslozka=request.args.get("slozka"))
+                           podslozka=request.args.get("slozka"),
+                           idx_pocet=idx_pocet, idx_updated=idx_updated,
+                           hledat_dok=request.args.get("hledat_dok", ""), nalezeno=nalezeno)
+
+
+@bp.route("/operativa/<int:id>/index-dokumenty", methods=["POST"])
+@login_required
+def operativa_index_dokumenty(id):
+    firma = Firma.query.get_or_404(id)
+    indexovano, celkem, chyba = dokumenty_service.index_klienta(firma)
+    if chyba:
+        flash(f"Indexace: {chyba}", "error")
+    else:
+        flash(f"Indexováno {indexovano} dokumentů z {celkem} souborů.", "info")
+    return redirect(url_for("main.operativa_klient", id=id))
+
+
+@bp.route("/operativa/dokumenty")
+@login_required
+def operativa_dokumenty():
+    dotaz = request.args.get("q", "").strip()
+    vysledky = dokumenty_service.hledej(dotaz) if dotaz else None
+    return render_template("operativa_dokumenty.html", dotaz=dotaz, vysledky=vysledky)
 
 
 @bp.route("/operativa/<int:id>/onedrive", methods=["POST"])

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Dokumenty</h1>
+<p class="muted" style="margin-bottom:18px">Hledej napříč indexovanými dokumenty všech klientů.</p>
+
+<form class="filters" method="get" style="margin-bottom:18px">
+  <input type="text" name="q" value="{{ dotaz }}" placeholder="Hledat ve smlouvách, nabídkách, zápisech…" style="min-width:340px">
+  <button class="btn" type="submit">Hledat</button>
+</form>
+
+{% if vysledky is not none %}
+  {% if vysledky %}
+  <p class="muted" style="font-size:13px;margin-bottom:10px">{{ vysledky|length }} nálezů</p>
+  {% for v in vysledky %}
+  <div class="stat" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <b>{% if v.web_url %}<a href="{{ v.web_url }}" target="_blank">{{ v.nazev }}</a>{% else %}{{ v.nazev }}{% endif %}</b>
+      <a class="muted" href="{{ url_for('main.operativa_klient', id=v.firma_id) }}" style="font-size:13px">{{ v.firma }}</a>
+    </div>
+    <div class="muted" style="font-size:11px;margin:2px 0 6px">{{ v.cesta or '/' }}</div>
+    <div style="font-size:13px;line-height:1.5;color:#445">{{ v.snippet }}</div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Nic nenalezeno. (Dokumenty se musí nejdřív načíst u jednotlivých klientů — tlačítko „Načíst dokumenty".)</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

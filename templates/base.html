@@ -120,6 +120,7 @@
     <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
       {% if operativa_mode %}
         <a class="logout" href="{{ url_for('main.operativa') }}">Klienti</a>
+        <a class="logout" href="{{ url_for('main.operativa_dokumenty') }}">Dokumenty</a>
         <a class="logout" href="{{ url_for('main.operativa_resitele') }}">Řešitelé</a>
       {% else %}
         <a class="logout" href="{{ url_for('main.prehled') }}">Přehled</a>

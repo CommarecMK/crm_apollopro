@@ -117,6 +117,30 @@ def vypis_slozky_klienta(odkaz, item_id=None):
     return {"drive_id": drive_id, "polozky": vypis(drive_id, item_id or root_id)}
 
 
+def vsechny_soubory(odkaz, max_souboru=800, max_hloubka=6):
+    """Rekurzivně projde složku klienta a vrátí seznam souborů [{id,nazev,cesta,velikost,web_url}].
+    drive_id je u všech stejné (z resolve)."""
+    r = resolve_slozka(odkaz)
+    if not r:
+        return None
+    drive_id, root_id = r
+    out = []
+
+    def _walk(item_id, cesta, hloubka):
+        if hloubka > max_hloubka or len(out) >= max_souboru:
+            return
+        for p in vypis(drive_id, item_id):
+            if len(out) >= max_souboru:
+                return
+            if p["je_slozka"]:
+                _walk(p["id"], f"{cesta}/{p['nazev']}", hloubka + 1)
+            else:
+                out.append({"id": p["id"], "nazev": p["nazev"], "cesta": cesta.strip("/"),
+                            "velikost": p["velikost"], "web_url": p["web_url"]})
+    _walk(root_id, "", 0)
+    return {"drive_id": drive_id, "soubory": out}
+
+
 def stahni(drive_id, item_id):
     """Stáhne obsah souboru (bytes) — pro Fázi 2 (extrakce textu pro AI)."""
     if not je_nakonfigurovano():
