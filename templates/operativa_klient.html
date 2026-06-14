@@ -8,6 +8,9 @@
 {% if not freelo_ok %}
 <div class="note">Freelo není nakonfigurované (chybí FREELO_EMAIL / FREELO_API_KEY).</div>
 {% elif not firma.freelo_tasklist_id %}
+{% if not smi_klient() %}
+<div class="note">Klient nemá napojené Freelo. Napojení provede admin, editor nebo majitel.</div>
+{% else %}
 <div class="stat">
   <p class="muted" style="font-size:13px;margin-bottom:10px">Napoj klienta na Freelo — nejdřív projekt, pak tasklist:</p>
   <form method="post" action="{{ url_for('main.operativa_freelo_napojit', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -35,6 +38,7 @@ function naplnTl(){
   else { tl.disabled=true; }
 }
 </script>
+{% endif %}
 {% else %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
   <span class="muted" style="font-size:13px">{{ ukoly.open_count }} otevřených úkolů</span>
@@ -44,18 +48,20 @@ function naplnTl(){
   </form>
 </div>
 <table>
-  <thead><tr><th>Úkol</th><th>Řešitel</th><th style="text-align:center">Stav</th></tr></thead>
+  <thead><tr><th>Úkol</th><th>Řešitel</th><th>Termín</th><th style="text-align:center">Stav</th></tr></thead>
   <tbody>
     {% for u in ukoly.aktivni %}
-    <tr><td><a href="{{ u.url }}" target="_blank">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+    <tr><td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+      <td style="color:{{ 'var(--red)' if u.termin else 'inherit' }}">{{ u.termin or '—' }}</td>
       <td style="text-align:center"><span class="dot oranzova"></span>otevřený</td></tr>
     {% endfor %}
     {% for u in ukoly.hotove %}
-    <tr style="opacity:.6"><td><a href="{{ u.url }}" target="_blank">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+    <tr style="opacity:.6"><td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
+      <td>{{ u.termin or '—' }}</td>
       <td style="text-align:center"><span class="dot zelena"></span>hotovo</td></tr>
     {% endfor %}
     {% if not ukoly.aktivni and not ukoly.hotove %}
-    <tr><td colspan="3" class="muted" style="text-align:center;padding:18px">Žádné úkoly v tomto tasklistu.</td></tr>
+    <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Žádné úkoly v tomto tasklistu.</td></tr>
     {% endif %}
   </tbody>
 </table>

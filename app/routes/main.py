@@ -591,11 +591,16 @@ def cashflow():
 @login_required
 def operativa():
     hledat = request.args.get("q", "").strip()
-    q = _bez_internich(Firma.query).filter(Firma.aktivni.is_(True))
+    f_aktivita = request.args.get("aktivita", "aktivni")
+    q = _bez_internich(Firma.query)
+    if f_aktivita == "aktivni":
+        q = q.filter(Firma.aktivni.is_(True))
+    elif f_aktivita == "neaktivni":
+        q = q.filter(Firma.aktivni.is_(False))
     if hledat:
         q = q.filter(Firma.nazev.ilike(f"%{hledat}%"))
     seznam = q.order_by(Firma.nazev).all()
-    return render_template("operativa.html", firmy=seznam, hledat=hledat)
+    return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita)
 
 
 @bp.route("/operativa/<int:id>")
@@ -609,7 +614,7 @@ def operativa_klient(id):
 
 
 @bp.route("/operativa/<int:id>/freelo", methods=["POST"])
-@login_required
+@klient_required
 def operativa_freelo_napojit(id):
     firma = Firma.query.get_or_404(id)
     tl = request.form.get("tasklist_id", "").strip()
@@ -619,10 +624,41 @@ def operativa_freelo_napojit(id):
     return redirect(url_for("main.operativa_klient", id=id))
 
 
+@bp.route("/operativa/ukol/<int:task_id>")
+@login_required
+def ukol_detail(task_id):
+    detail = freelo_service.ukol_detail(task_id)
+    if not detail:
+        flash("Úkol se nepodařilo načíst z Freelo.", "error")
+        return redirect(url_for("main.operativa"))
+    firma = Firma.query.filter_by(freelo_tasklist_id=detail.get("tasklist_id")).first()
+    reseni = freelo_service.workers(detail.get("project_id"))
+    kom = freelo_service.komentare(task_id)
+    return render_template("ukol_detail.html", u=detail, firma=firma, reseni=reseni, komentare=kom)
+
+
+@bp.route("/operativa/ukol/<int:task_id>/prirad", methods=["POST"])
+@login_required
+def ukol_prirad(task_id):
+    ok = freelo_service.priradit(task_id, request.form.get("worker_id", ""))
+    flash("Řešitel přiřazen." if ok else "Přiřazení se nepovedlo (ověř Freelo).", "info" if ok else "error")
+    return redirect(url_for("main.ukol_detail", task_id=task_id))
+
+
+@bp.route("/operativa/ukol/<int:task_id>/komentar", methods=["POST"])
+@login_required
+def ukol_komentar(task_id):
+    text = request.form.get("text", "").strip()
+    if text:
+        ok = freelo_service.pridej_komentar(task_id, text)
+        flash("Komentář přidán." if ok else "Komentář se nepovedl.", "info" if ok else "error")
+    return redirect(url_for("main.ukol_detail", task_id=task_id))
+
+
 @bp.route("/diagnostika/freelo")
 @login_required
 def diagnostika_freelo():
-    return jsonify(freelo_service.diagnostika(request.args.get("tasklist", "")))
+    return jsonify(freelo_service.diagnostika(request.args.get("tasklist", ""), request.args.get("task", "")))
 
 
 # ─── Firmy (databáze klientů + MERK/ARES) ──────────────────────────
@@ -949,6 +985,13 @@ def kontakt_smazat(id):
 # ─── Správa uživatelů (jen admin) ──────────────────────────────────
 ROLE_POPIS = {"admin": "Admin (vše + uživatelé)", "editor": "Editor (zakázky, rozpočty, Obnovit)",
               "majitel": "Majitel (čtení + MERK/kontakty)", "interim": "Interim (čtení bez financí)"}
+
+
+@bp.route("/admin")
+@admin_required
+def admin_hub():
+    return render_template("admin.html",
+                           freelo_ok=freelo_service.je_nakonfigurovano())
 
 
 @bp.route("/admin/uzivatele")

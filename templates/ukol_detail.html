@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+
+<p style="margin-bottom:6px">
+  {% if firma %}<a href="{{ url_for('main.operativa_klient', id=firma.id) }}">← {{ firma.nazev }}</a>
+  {% else %}<a href="{{ url_for('main.operativa') }}">← Operativa</a>{% endif %}
+</p>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+  <h1 style="color:var(--navy);font-size:26px;margin:0">{{ u.nazev }}</h1>
+  <a class="logout" href="{{ u.freelo_url }}" target="_blank" style="color:#778">otevřít ve Freelo ↗</a>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num" style="font-size:16px">{{ u.zadan or '—' }}</div><div class="lbl">Zadáno</div></div>
+  <div class="stat"><div class="num" style="font-size:16px;color:{{ 'var(--red)' if u.termin else 'var(--navy)' }}">{{ u.termin or '—' }}</div><div class="lbl">Termín</div></div>
+  <div class="stat"><div class="num" style="font-size:16px">{{ u.posledni or '—' }}</div><div class="lbl">Poslední iterace</div></div>
+  <div class="stat"><div class="num" style="font-size:16px">{{ u.resitel or '—' }}</div><div class="lbl">Řešitel</div></div>
+</div>
+
+<div class="cols2">
+  <div>
+    {% if u.popis %}
+    <div class="stat" style="margin-bottom:18px">
+      <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Popis</h3>
+      <div style="font-size:14px;line-height:1.6">{{ u.popis|safe }}</div>
+    </div>
+    {% endif %}
+
+    <h2 style="color:var(--navy);font-size:18px;margin:8px 0 10px">Komentáře / iterace</h2>
+    <form method="post" action="{{ url_for('main.ukol_komentar', task_id=u.id) }}" style="margin-bottom:14px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="text" rows="2" placeholder="Napsat komentář…" style="{{ istyl }};width:100%;resize:vertical"></textarea>
+      <button class="btn" type="submit" style="margin-top:8px">Přidat komentář</button>
+    </form>
+    {% for k in komentare %}
+    <div class="stat" style="margin-bottom:10px">
+      <div style="font-size:13px;color:#667;margin-bottom:4px"><b>{{ k.autor or '—' }}</b> · {{ k.datum or '' }}</div>
+      <div style="font-size:14px;line-height:1.5">{{ k.text|safe }}</div>
+    </div>
+    {% else %}
+    <p class="muted" style="font-size:13px">Zatím žádné komentáře.</p>
+    {% endfor %}
+  </div>
+
+  <div>
+    <div class="stat">
+      <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Přiřadit řešitele</h3>
+      {% if reseni %}
+      <form method="post" action="{{ url_for('main.ukol_prirad', task_id=u.id) }}" style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="worker_id" style="{{ istyl }};flex:1">
+          {% for wid, jm in reseni %}<option value="{{ wid }}" {{ 'selected' if jm==u.resitel }}>{{ jm }}</option>{% endfor %}
+        </select>
+        <button class="btn" type="submit">Přiřadit</button>
+      </form>
+      {% else %}
+      <p class="muted" style="font-size:13px">Seznam řešitelů se nepodařilo načíst.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

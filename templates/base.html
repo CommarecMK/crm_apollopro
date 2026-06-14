@@ -22,6 +22,7 @@
     a{color:var(--cyan-dark);text-decoration:none}
     .navbar{background:var(--navy);color:#fff;padding:14px 28px;display:flex;
       align-items:center;justify-content:space-between}
+    .navbar.op{background:#13593A}  /* operativa = decentní zelená */
     .navbar .brand{display:flex;align-items:center;gap:10px}
     .navbar .mark{width:14px;height:14px;background:var(--cyan);
       clip-path:polygon(0 0,100% 50%,0 100%,30% 50%)}
@@ -106,7 +107,8 @@
   </style>
 </head>
 <body>
-  <div class="navbar">
+  {% set operativa_mode = request.path.startswith('/operativa') %}
+  <div class="navbar {{ 'op' if operativa_mode }}">
     <div class="brand">
       <span class="mark"></span>
       <b>Commarec</b><span class="sub">Kokpit zakázek</span>
@@ -137,13 +139,15 @@
     {% block content %}{% endblock %}
   </div>
   {% if session.get('user_id') %}
-  <footer style="text-align:center;padding:24px;color:#99a;font-size:12px">
+  <footer style="margin-top:40px;background:var(--navy-dark);color:#cdd6e4;font-size:13px;
+                 padding:18px 40px;display:flex;justify-content:center;gap:18px;flex-wrap:wrap">
     {% if request.path.startswith('/operativa') %}
-      <a href="{{ url_for('main.prehled') }}" style="color:#778">Přepnout na Řízení &amp; finance</a>
+      <a href="{{ url_for('main.prehled') }}" style="color:var(--cyan)">↔ Přepnout na Řízení &amp; finance</a>
     {% else %}
-      <a href="{{ url_for('main.operativa') }}" style="color:#778">Přepnout na Operativu</a>
+      <a href="{{ url_for('main.operativa') }}" style="color:var(--cyan)">↔ Přepnout na Operativu</a>
     {% endif %}
-    · <a href="https://apollopro.io" style="color:#778">Apollo Pro portál</a> · Commarec
+    <a href="https://apollopro.io" style="color:#cdd6e4">Apollo Pro portál</a>
+    <span style="color:#8a9ab2">Commarec</span>
   </footer>
   {% endif %}
 </body>

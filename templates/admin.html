@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Administrace</h1>
+<p class="muted" style="margin-bottom:22px">Nastavení aplikace Apollo Pro — uživatelé, firmy, datové napojení.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+
+  <a href="{{ url_for('main.admin_uzivatele') }}" class="stat" style="text-decoration:none;color:var(--text);display:block">
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Uživatelé &amp; role</h3>
+    <p class="muted" style="font-size:13px">Přidávání uživatelů, role a oprávnění.</p>
+  </a>
+
+  <a href="{{ url_for('main.firmy') }}" class="stat" style="text-decoration:none;color:var(--text);display:block">
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Firmy &amp; zakázky</h3>
+    <p class="muted" style="font-size:13px">Klienti, dodavatelé, PM, rozpočty, Clockify zkratky.</p>
+  </a>
+
+  <div class="stat">
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Data z Clockify</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:10px">Ruční obnova snapshotu (jinak 1× denně automaticky).</p>
+    <form method="post" action="{{ url_for('main.obnovit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">Obnovit z Clockify</button>
+    </form>
+  </div>
+
+  <div class="stat">
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Freelo napojení</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:8px">
+      Stav: {% if freelo_ok %}<span style="color:var(--green)">nakonfigurováno ✓</span>{% else %}<span style="color:var(--red)">chybí klíče</span>{% endif %}<br>
+      Napojení tasklistů řeš v Operativě u jednotlivých klientů.
+    </p>
+    <a class="btn btn-ghost" href="{{ url_for('main.operativa') }}">Otevřít Operativu</a>
+  </div>
+
+  <div class="stat">
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Diagnostika</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:8px">Kontrola napojení integrací.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn btn-ghost" href="{{ url_for('main.diagnostika_clockify') }}" target="_blank">Clockify</a>
+      <a class="btn btn-ghost" href="{{ url_for('main.diagnostika_merk') }}" target="_blank">MERK</a>
+      <a class="btn btn-ghost" href="{{ url_for('main.diagnostika_freelo') }}" target="_blank">Freelo</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

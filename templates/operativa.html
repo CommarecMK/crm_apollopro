@@ -5,7 +5,12 @@
 
 <form class="filters" method="get" style="margin-bottom:18px">
   <input type="text" name="q" value="{{ hledat }}" placeholder="Hledat klienta…">
-  <button class="btn" type="submit">Hledat</button>
+  <select name="aktivita">
+    {% for val, popis in [('aktivni','Aktivní'),('neaktivni','Neaktivní'),('vse','Vše')] %}
+      <option value="{{ val }}" {{ 'selected' if val==f_aktivita }}>{{ popis }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Filtrovat</button>
   <a class="btn btn-ghost" href="{{ url_for('main.operativa') }}">Zrušit</a>
 </form>
 

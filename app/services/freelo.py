@@ -61,11 +61,104 @@ def projekty_s_tasklisty():
         return []
 
 
+def _datum(v):
+    """Z Freelo pole vytáhne datum (může být string nebo {'date': ...})."""
+    if isinstance(v, dict):
+        return (v.get("date") or "")[:10]
+    return (v or "")[:10] if isinstance(v, str) else ""
+
+
 def _uorm(t, hotovo):
-    return {"nazev": t.get("name", ""), "hotovo": hotovo,
-            "url": f"https://app.freelo.io/task/{t.get('id')}",
+    return {"id": t.get("id"), "nazev": t.get("name", ""), "hotovo": hotovo,
+            "freelo_url": f"https://app.freelo.io/task/{t.get('id')}",
+            "termin": _datum(t.get("due_date")),
             "resitel": ((t.get("worker") or {}).get("fullname")
                         or (t.get("assignee") or {}).get("fullname") or "")}
+
+
+def ukol_detail(task_id):
+    """Detail úkolu z Freelo: název, popis, stav, datumy, řešitel, projekt/tasklist."""
+    if not je_nakonfigurovano() or not task_id:
+        return None
+    try:
+        r = _get(f"/task/{task_id}")
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        t = d.get("data", d)
+        return {
+            "id": t.get("id"),
+            "nazev": t.get("name", ""),
+            "popis": (t.get("comment") or {}).get("content", "") if isinstance(t.get("comment"), dict) else (t.get("description") or ""),
+            "stav": (t.get("state") or {}).get("state") if isinstance(t.get("state"), dict) else (t.get("state") or ""),
+            "zadan": _datum(t.get("date_add")),
+            "termin": _datum(t.get("due_date")),
+            "posledni": _datum(t.get("date_edited_at") or t.get("date_edited")),
+            "resitel": ((t.get("worker") or {}).get("fullname") or (t.get("assignee") or {}).get("fullname") or ""),
+            "project_id": t.get("project", {}).get("id") if isinstance(t.get("project"), dict) else t.get("project_id"),
+            "tasklist_id": t.get("tasklist", {}).get("id") if isinstance(t.get("tasklist"), dict) else t.get("tasklist_id"),
+            "freelo_url": f"https://app.freelo.io/task/{t.get('id')}",
+        }
+    except Exception as e:
+        print(f"[freelo] ukol_detail: {e}")
+        return None
+
+
+def workers(project_id):
+    """Řešitelé v projektu → [(id, fullname)]."""
+    if not je_nakonfigurovano() or not project_id:
+        return []
+    try:
+        r = _get(f"/project/{project_id}/workers")
+        if r.status_code != 200:
+            return []
+        ws = r.json().get("data", {}).get("workers", []) or r.json().get("workers", [])
+        return [(w.get("id"), w.get("fullname", "")) for w in ws]
+    except Exception as e:
+        print(f"[freelo] workers: {e}")
+        return []
+
+
+def komentare(task_id):
+    """Komentáře/aktivita úkolu → [{autor, datum, text}] (nejnovější první)."""
+    if not je_nakonfigurovano() or not task_id:
+        return []
+    try:
+        r = _get(f"/task/{task_id}/comments")
+        if r.status_code != 200:
+            return []
+        data = r.json().get("data", {}).get("comments", []) or r.json().get("comments", [])
+        out = []
+        for c in data:
+            out.append({"autor": (c.get("author") or {}).get("fullname", ""),
+                        "datum": _datum(c.get("date_add")),
+                        "text": c.get("content", "")})
+        return out
+    except Exception as e:
+        print(f"[freelo] komentare: {e}")
+        return []
+
+
+def priradit(task_id, worker_id):
+    try:
+        r = requests.post(f"{BASE}/task/{task_id}", auth=(FREELO_EMAIL, FREELO_API_KEY),
+                          headers={"Content-Type": "application/json"},
+                          json={"worker_id": int(worker_id)}, timeout=TIMEOUT)
+        return r.status_code in (200, 201)
+    except Exception as e:
+        print(f"[freelo] priradit: {e}")
+        return False
+
+
+def pridej_komentar(task_id, text):
+    try:
+        r = requests.post(f"{BASE}/task/{task_id}/comments", auth=(FREELO_EMAIL, FREELO_API_KEY),
+                          headers={"Content-Type": "application/json"},
+                          json={"content": text}, timeout=TIMEOUT)
+        return r.status_code in (200, 201)
+    except Exception as e:
+        print(f"[freelo] komentar: {e}")
+        return False
 
 
 def ukoly_klienta(tasklist_id):
@@ -91,7 +184,7 @@ def ukoly_klienta(tasklist_id):
         return prazdny
 
 
-def diagnostika(tasklist_id=None):
+def diagnostika(tasklist_id=None, task_id=None):
     out = {"nakonfigurovano": je_nakonfigurovano(), "email_len": len(FREELO_EMAIL), "klic_len": len(FREELO_API_KEY)}
     if not je_nakonfigurovano():
         return out
@@ -102,7 +195,11 @@ def diagnostika(tasklist_id=None):
         if tasklist_id:
             rt = _get(f"/tasklist/{tasklist_id}")
             out["tasklist_status"] = rt.status_code
-            out["tasklist_ukazka"] = (rt.text or "")[:300]
+            out["tasklist_ukazka"] = (rt.text or "")[:400]
+        if task_id:
+            rk = _get(f"/task/{task_id}")
+            out["task_status"] = rk.status_code
+            out["task_ukazka"] = (rk.text or "")[:600]
     except Exception as e:
         out["chyba"] = str(e)
     return out
