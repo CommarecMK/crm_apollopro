@@ -23,3 +23,6 @@ FREELO_APP_URL        = os.environ.get("FREELO_APP_URL", "https://app.freelo.io"
 GRAPH_TENANT_ID       = os.environ.get("GRAPH_TENANT_ID", "")
 GRAPH_CLIENT_ID       = os.environ.get("GRAPH_CLIENT_ID", "")
 GRAPH_CLIENT_SECRET   = os.environ.get("GRAPH_CLIENT_SECRET", "")
+# Voyage AI — embeddingy pro sémantické hledání nad dokumenty (Anthropic ekosystém, ne OpenAI)
+VOYAGE_API_KEY        = os.environ.get("VOYAGE_API_KEY", "")
+VOYAGE_MODEL          = os.environ.get("VOYAGE_MODEL", "voyage-3.5")

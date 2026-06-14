@@ -136,7 +136,7 @@ def vsechny_soubory(odkaz, max_souboru=800, max_hloubka=6):
                 _walk(p["id"], f"{cesta}/{p['nazev']}", hloubka + 1)
             else:
                 out.append({"id": p["id"], "nazev": p["nazev"], "cesta": cesta.strip("/"),
-                            "velikost": p["velikost"], "web_url": p["web_url"]})
+                            "velikost": p["velikost"], "web_url": p["web_url"], "zmeneno": p["zmeneno"]})
     _walk(root_id, "", 0)
     return {"drive_id": drive_id, "soubory": out}
 

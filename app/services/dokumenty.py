@@ -32,14 +32,20 @@ def index_klienta(firma):
     db.session.commit()
     indexovano = 0
     for s in kandidati:
+        ex = existujici.get(s["id"])
+        # přeskoč nezměněný a už načtený soubor → rychlé navázání po restartu
+        if ex and ex.text and ex.soubor_zmeneno and ex.soubor_zmeneno == s.get("zmeneno"):
+            indexovano += 1
+            firma.dok_index_progress = f"{indexovano} ze {celkem_k}"
+            continue
         obsah = onedrive.stahni(drive_id, s["id"])
         if obsah:
             text = extrakce.extrahuj_text(obsah, s["nazev"]) or ""
-            d = existujici.get(s["id"]) or KlientDokument(firma_id=firma.id, item_id=s["id"])
+            d = ex or KlientDokument(firma_id=firma.id, item_id=s["id"])
             d.drive_id = drive_id
             d.nazev, d.cesta, d.web_url = s["nazev"], s["cesta"], s["web_url"]
             d.velikost = s["velikost"] or 0
-            d.text, d.updated = text, ted
+            d.text, d.updated, d.soubor_zmeneno = text, ted, s.get("zmeneno")
             db.session.add(d)
             db.session.flush()  # potřebujeme d.id pro chunky
             embeddings.reindex_dokument(d)

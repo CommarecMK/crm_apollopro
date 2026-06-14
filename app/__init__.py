@@ -48,8 +48,23 @@ def create_app():
         backfill_ico()            # doplní IČO firmám z jejich zakázek
         _backfill_tyden()         # převede staré měsíční rozpočty na týdenní
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
+        _reset_indexace()         # po restartu uvolní zaseknuté příznaky indexace
 
     return app
+
+
+def _reset_indexace():
+    """Po restartu appky (deploy) vlákna indexace nepřežijí → uvolni zaseknuté příznaky."""
+    from .models import Firma
+    try:
+        zmeneno = Firma.query.filter_by(dok_index_bezi=True).update(
+            {"dok_index_bezi": False, "dok_index_progress": None})
+        if zmeneno:
+            db.session.commit()
+            print(f"[start] Uvolněno {zmeneno} zaseknutých indexací.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[start] reset indexace: {e}")
 
 
 def _backfill_tyden():
@@ -112,6 +127,9 @@ def _inline_migrace():
             "uzivatel": {
                 "freelo_email": "VARCHAR(160)",
                 "freelo_api_key": "VARCHAR(255)",
+            },
+            "klient_dokument": {
+                "soubor_zmeneno": "VARCHAR(40)",
             },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",

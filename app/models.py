@@ -119,7 +119,8 @@ class KlientDokument(db.Model):
     web_url   = db.Column(db.String(800))
     velikost  = db.Column(db.Integer, default=0)
     text      = db.Column(db.Text)                      # extrahovaný text
-    updated   = db.Column(db.String(40))
+    updated   = db.Column(db.String(40))                # kdy naposledy indexováno
+    soubor_zmeneno = db.Column(db.String(40))           # datum změny souboru na OneDrive (pro přeskočení nezměněných)
     firma     = db.relationship("Firma")
     chunky    = db.relationship("DokumentChunk", backref="dokument", lazy=True,
                                 cascade="all, delete-orphan")

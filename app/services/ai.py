@@ -4,7 +4,13 @@ Vyžaduje ANTHROPIC_API_KEY (firemní). Retrieval řeší embeddings.hledat_rele
 """
 import os
 
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+# Pořadí modelů k vyzkoušení (první funkční se zapamatuje). Lze přebít env ANTHROPIC_MODEL.
+# Default = Opus 4.8 (nejchytřejší), fallback na Sonnet.
+MODELY = [m for m in [os.environ.get("ANTHROPIC_MODEL"),
+                      "claude-opus-4-8", "claude-sonnet-4-6",
+                      "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] if m]
+MODEL = MODELY[0]
+_FUNKCNI_MODEL = None
 
 
 def ma_ai():
@@ -12,16 +18,27 @@ def ma_ai():
 
 
 def _claude(system, user, max_tokens=1500):
-    """Vrátí (text, chyba). Při úspěchu chyba=None."""
+    """Vrátí (text, chyba). Zkusí modely z MODELY, první funkční si zapamatuje."""
+    global _FUNKCNI_MODEL
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        msg = client.messages.create(model=MODEL, max_tokens=max_tokens,
-                                     system=system, messages=[{"role": "user", "content": user}])
-        return msg.content[0].text, None
     except Exception as e:
-        print(f"[ai] {e}")
-        return None, str(e)
+        return None, f"chybí knihovna anthropic: {e}"
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    poradi = [_FUNKCNI_MODEL] if _FUNKCNI_MODEL else MODELY
+    posledni_chyba = None
+    for model in poradi:
+        try:
+            msg = client.messages.create(model=model, max_tokens=max_tokens,
+                                         system=system, messages=[{"role": "user", "content": user}])
+            _FUNKCNI_MODEL = model
+            return msg.content[0].text, None
+        except Exception as e:
+            posledni_chyba = f"{model}: {e}"
+            if "not_found" not in str(e) and "404" not in str(e):
+                break  # jiná chyba než neznámý model → nemá smysl zkoušet dál
+    print(f"[ai] {posledni_chyba}")
+    return None, posledni_chyba
 
 
 def test_volani():
@@ -29,7 +46,8 @@ def test_volani():
     if not ma_ai():
         return {"ma_klic": False, "model": MODEL}
     txt, chyba = _claude("Odpovídej česky.", "Napiš jen slovo: OK", max_tokens=20)
-    return {"ma_klic": True, "model": MODEL, "vystup": txt, "chyba": chyba}
+    return {"ma_klic": True, "model": _FUNKCNI_MODEL or MODEL,
+            "zkousene": MODELY, "vystup": txt, "chyba": chyba}
 
 
 def _freelo_kontext(firma):

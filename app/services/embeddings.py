@@ -6,17 +6,43 @@ Podobnost se počítá v Pythonu (numpy) — scope je jeden klient, takže to st
 import os
 import re
 import json
+import requests
 
 CHUNK_SIZE_SMALL = 1500
 CHUNK_SIZE_MEDIUM = 3000
 CHUNK_SIZE_LARGE = 6000
 CHUNK_OVERLAP = 200
 MAX_CHUNKS_PER_DOC = 150
-EMB_MODEL = "text-embedding-3-small"
+VOYAGE_URL = "https://api.voyageai.com/v1/embeddings"
+DAVKA = 64  # max textů na jeden Voyage dotaz
+
+
+def _voyage_model():
+    return os.environ.get("VOYAGE_MODEL", "voyage-3.5")
 
 
 def ma_embeddings():
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    return bool(os.environ.get("VOYAGE_API_KEY"))
+
+
+def _voyage(texty, input_type):
+    """Zavolá Voyage embeddings pro list textů → list vektorů (None při chybě)."""
+    key = os.environ.get("VOYAGE_API_KEY")
+    if not key or not texty:
+        return [None] * len(texty)
+    try:
+        r = requests.post(VOYAGE_URL,
+                          headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                          json={"input": [t[:8000] for t in texty], "model": _voyage_model(),
+                                "input_type": input_type}, timeout=60)
+        if r.status_code != 200:
+            print(f"[voyage] {r.status_code}: {r.text[:200]}")
+            return [None] * len(texty)
+        data = sorted(r.json().get("data", []), key=lambda x: x.get("index", 0))
+        return [d.get("embedding") for d in data] if len(data) == len(texty) else [None] * len(texty)
+    except Exception as e:
+        print(f"[voyage] {e}")
+        return [None] * len(texty)
 
 
 def rozdelit_na_chunky(text, nazev=""):
@@ -47,31 +73,18 @@ def rozdelit_na_chunky(text, nazev=""):
     return chunks
 
 
-def vytvorit_embedding(text):
-    if not ma_embeddings():
-        return None
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        resp = client.embeddings.create(model=EMB_MODEL, input=text[:8000])
-        return resp.data[0].embedding
-    except Exception as e:
-        print(f"[embeddings] {e}")
-        return None
+def vytvorit_embedding(text, input_type="query"):
+    return _voyage([text], input_type)[0]
 
 
-def vytvorit_embeddings_davka(texty):
-    """Hromadně (šetří dotazy). Vrátí list embeddingů (nebo None při chybě)."""
+def vytvorit_embeddings_davka(texty, input_type="document"):
+    """Hromadně po dávkách (Voyage). Vrátí list embeddingů (None při chybě)."""
     if not ma_embeddings() or not texty:
         return [None] * len(texty)
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        resp = client.embeddings.create(model=EMB_MODEL, input=[t[:8000] for t in texty])
-        return [d.embedding for d in resp.data]
-    except Exception as e:
-        print(f"[embeddings] davka: {e}")
-        return [None] * len(texty)
+    out = []
+    for i in range(0, len(texty), DAVKA):
+        out.extend(_voyage(texty[i:i + DAVKA], input_type))
+    return out
 
 
 def reindex_dokument(dok):

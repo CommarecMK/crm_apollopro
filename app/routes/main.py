@@ -125,7 +125,8 @@ from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
 from ..services import (clockify, firmy as firmy_service, snapshot,
                         freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service,
-                        dokumenty as dokumenty_service, ai as ai_service)
+                        dokumenty as dokumenty_service, ai as ai_service,
+                        embeddings as embeddings_service)
 
 bp = Blueprint("main", __name__)
 
@@ -806,8 +807,12 @@ def diagnostika_onedrive():
 @login_required
 def diagnostika_ai():
     import os
+    test_emb = embeddings_service.vytvorit_embedding("test")
     return jsonify({**ai_service.test_volani(),
-                    "ma_openai": bool(os.environ.get("OPENAI_API_KEY"))})
+                    "ma_voyage": bool(os.environ.get("VOYAGE_API_KEY")),
+                    "voyage_model": os.environ.get("VOYAGE_MODEL", "voyage-3.5"),
+                    "embedding_funguje": test_emb is not None,
+                    "embedding_rozmer": len(test_emb) if test_emb else 0})
 
 
 @bp.route("/operativa/<int:id>/freelo", methods=["POST"])
