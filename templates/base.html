@@ -26,6 +26,18 @@
       align-items:center;justify-content:space-between}
     .navbar.op{background:#13593A}  /* operativa = decentní zelená */
     .navbar .brand{display:flex;align-items:center;gap:10px}
+    /* App-switcher u loga */
+    .appsw{position:relative}
+    .appsw summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px}
+    .appsw summary::-webkit-details-marker{display:none}
+    .appsw summary .caret{color:var(--grey);font-size:11px;margin-left:2px}
+    .appsw-panel{position:absolute;z-index:60;top:calc(100% + 10px);left:0;background:#fff;
+      border-radius:10px;box-shadow:0 10px 30px rgba(14,33,62,.22);padding:6px;min-width:230px}
+    .appsw-panel a{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 12px;border-radius:7px;color:var(--navy);font-size:14px;font-weight:600;text-decoration:none}
+    .appsw-panel a:hover{background:var(--n9)}
+    .appsw-panel a small{color:#99a;font-weight:500;font-size:11px}
+    .appsw-panel .odd{height:1px;background:var(--n8);margin:5px 8px}
     .navbar .mark{width:14px;height:14px;background:var(--cyan);
       clip-path:polygon(0 0,100% 50%,0 100%,30% 50%)}
     .navbar .brand b{font-family:'Druk Condensed Super','Montserrat',sans-serif;
@@ -111,10 +123,23 @@
 <body>
   {% set operativa_mode = request.path.startswith('/operativa') %}
   <div class="navbar {{ 'op' if operativa_mode }}">
-    <div class="brand">
-      <span class="mark"></span>
-      <b>Commarec</b><span class="sub">Kokpit zakázek</span>
-    </div>
+    <details class="appsw">
+      <summary class="brand">
+        <span class="mark"></span>
+        <b>Commarec</b><span class="sub">{{ 'Operativa' if operativa_mode else 'Kokpit zakázek' }}</span>
+        <span class="caret">▾</span>
+      </summary>
+      <div class="appsw-panel">
+        <a href="{{ PORTAL_URL }}">Portál <small>rozcestník</small></a>
+        <div class="odd"></div>
+        <a href="{{ url_for('main.prehled') }}">Řízení &amp; finance <small>zakázky, cashflow</small></a>
+        <a href="{{ url_for('main.operativa') }}">Operativa <small>úkoly, dokumenty</small></a>
+        {% if je_admin() %}<a href="{{ url_for('main.admin_hub') }}">Administrace <small>nastavení</small></a>{% endif %}
+        <div class="odd"></div>
+        <a href="{{ BRAIN_URL }}" target="_blank">Brain ↗ <small>znalosti, AI</small></a>
+        <a href="{{ FREELO_APP_URL }}" target="_blank">Freelo ↗ <small>původní nástroj</small></a>
+      </div>
+    </details>
     {% if session.get('user_id') %}
     {% set operativa_mode = request.path.startswith('/operativa') %}
     <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">

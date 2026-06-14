@@ -32,10 +32,13 @@ def create_app():
     from .routes.main import bp as main_bp
     app.register_blueprint(main_bp)
 
-    # Oprávnění dostupná v šablonách
+    # Oprávnění + odkazy na ostatní aplikace dostupné v šablonách
     from .auth import smi_zakazky, smi_klient, vidi_finance, je_admin
+    from .extensions import PORTAL_URL, BRAIN_URL, FREELO_APP_URL
     app.context_processor(lambda: {"smi_zakazky": smi_zakazky, "smi_klient": smi_klient,
-                                   "vidi_finance": vidi_finance, "je_admin": je_admin})
+                                   "vidi_finance": vidi_finance, "je_admin": je_admin,
+                                   "PORTAL_URL": PORTAL_URL, "BRAIN_URL": BRAIN_URL,
+                                   "FREELO_APP_URL": FREELO_APP_URL})
 
     with app.app_context():
         db.create_all()           # vytvoří chybějící tabulky
@@ -99,6 +102,7 @@ def _inline_migrace():
                 "projektovy_manazer": "VARCHAR(120)",
                 "freelo_tasklist_id": "INTEGER",
                 "onedrive_odkaz": "VARCHAR(800)",
+                "dok_index_bezi": "BOOLEAN DEFAULT FALSE",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",

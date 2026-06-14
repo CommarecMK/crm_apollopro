@@ -5,7 +5,7 @@ import os
 import calendar
 from datetime import datetime, timezone, date
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, session, flash, jsonify)
+                   url_for, session, flash, jsonify, current_app)
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from ..extensions import db, COMPANY_ICO
@@ -125,7 +125,7 @@ from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
 from ..services import (clockify, firmy as firmy_service, snapshot,
                         freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service,
-                        dokumenty as dokumenty_service)
+                        dokumenty as dokumenty_service, ai as ai_service)
 
 bp = Blueprint("main", __name__)
 
@@ -711,23 +711,32 @@ def operativa_klient(id):
     idx_pocet, idx_updated = dokumenty_service.stav(firma.id)
     nalezeno = dokumenty_service.hledej(request.args.get("hledat_dok", ""), firma.id) \
         if request.args.get("hledat_dok") else None
+    dotaz_ai = request.args.get("zeptej", "").strip()
+    ai_odpoved = ai_service.odpoved_na_dotaz(firma, dotaz_ai) if dotaz_ai else None
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
                            projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano(),
                            onedrive_ok=onedrive_service.je_nakonfigurovano(), dok=dok,
                            podslozka=request.args.get("slozka"),
                            idx_pocet=idx_pocet, idx_updated=idx_updated,
-                           hledat_dok=request.args.get("hledat_dok", ""), nalezeno=nalezeno)
+                           hledat_dok=request.args.get("hledat_dok", ""), nalezeno=nalezeno,
+                           dotaz_ai=dotaz_ai, ai_odpoved=ai_odpoved, ai_ok=ai_service.ma_ai())
 
 
 @bp.route("/operativa/<int:id>/index-dokumenty", methods=["POST"])
 @login_required
 def operativa_index_dokumenty(id):
+    import threading
     firma = Firma.query.get_or_404(id)
-    indexovano, celkem, chyba = dokumenty_service.index_klienta(firma)
-    if chyba:
-        flash(f"Indexace: {chyba}", "error")
-    else:
-        flash(f"Indexováno {indexovano} dokumentů z {celkem} souborů.", "info")
+    if not firma.onedrive_odkaz:
+        flash("Klient nemá napojenou OneDrive složku.", "error")
+        return redirect(url_for("main.operativa_klient", id=id))
+    if firma.dok_index_bezi:
+        flash("Indexace už probíhá — za chvíli obnov stránku.", "info")
+        return redirect(url_for("main.operativa_klient", id=id))
+    app_obj = current_app._get_current_object()
+    threading.Thread(target=dokumenty_service.index_klienta_async,
+                     args=(app_obj, firma.id), daemon=True).start()
+    flash("Indexace spuštěna na pozadí. Počet načtených dokumentů poroste — průběžně obnovuj stránku.", "info")
     return redirect(url_for("main.operativa_klient", id=id))
 
 

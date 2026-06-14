@@ -92,17 +92,11 @@ function naplnTl(){
 {% elif dok is none %}
 <div class="note" style="border-left-color:var(--red)">Složku se nepodařilo načíst (ověř odkaz nebo oprávnění). <a href="{{ firma.onedrive_odkaz }}" target="_blank">Otevřít na OneDrive ↗</a></div>
 {% else %}
-<!-- Index pro hledání / AI -->
+<!-- Hledání v dokumentech -->
 <div class="stat" style="margin-bottom:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-    <span class="muted" style="font-size:13px">
-      Index pro hledání: <b>{{ idx_pocet }}</b> dokumentů{% if idx_updated %} · aktualizace {{ idx_updated[:10] }}{% endif %}
-    </span>
-    <form method="post" action="{{ url_for('main.operativa_index_dokumenty', id=firma.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn" type="submit">{{ 'Aktualizovat index' if idx_pocet else 'Načíst dokumenty' }}</button>
-    </form>
-  </div>
+  <span class="muted" style="font-size:13px">
+    Index pro hledání: <b>{{ idx_pocet }}</b> dokumentů{% if idx_updated %} · aktualizace {{ idx_updated[:10] }}{% endif %}
+  </span>
   <form method="get" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
     <input type="text" name="hledat_dok" value="{{ hledat_dok }}" placeholder="Hledat v dokumentech klienta…"
            style="flex:1;min-width:280px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
@@ -123,18 +117,54 @@ function naplnTl(){
     <p class="muted" style="font-size:13px;margin-top:8px">Nic nenalezeno (možná je potřeba načíst dokumenty).</p>
     {% endif %}
   {% endif %}
+
+  <!-- AI: zeptej se na dokumenty klienta -->
+  <div style="margin-top:14px;border-top:1px solid var(--n8);padding-top:12px">
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="text" name="zeptej" value="{{ dotaz_ai }}" placeholder="Zeptej se na klienta (AI): např. „jaký je finální layout skladu?“"
+             style="flex:1;min-width:300px;padding:9px 11px;border:1px solid var(--cyan);border-radius:8px;font-family:inherit;font-size:14px">
+      <button class="btn" type="submit">Zeptat se AI</button>
+    </form>
+    {% if not ai_ok %}<p class="muted" style="font-size:12px;margin-top:6px">AI zatím není aktivní — doplň firemní ANTHROPIC_API_KEY na Railway.</p>{% endif %}
+    {% if ai_odpoved %}
+      {% if ai_odpoved.chyba %}
+      <div class="note" style="border-left-color:var(--orange);margin-top:10px">{{ ai_odpoved.chyba }}</div>
+      {% else %}
+      <div style="margin-top:10px;background:var(--n9);border-radius:8px;padding:12px 14px">
+        <div style="font-size:14px;line-height:1.6;white-space:pre-wrap">{{ ai_odpoved.odpoved }}</div>
+        {% if ai_odpoved.zdroje %}
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          {% for z in ai_odpoved.zdroje %}
+          <a href="{{ z.web_url }}" target="_blank" class="tag" style="text-decoration:none">📄 {{ z.nazev }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
 </div>
 
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
   <span class="muted" style="font-size:13px">
     {% if podslozka %}<a href="{{ url_for('main.operativa_klient', id=firma.id) }}">← zpět na kořen složky</a>{% else %}{{ dok.polozky|length }} položek{% endif %}
   </span>
-  {% if smi_klient() %}
-  <form method="post" action="{{ url_for('main.operativa_onedrive', id=firma.id) }}" style="display:inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="odkaz" value="">
-    <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">Odpojit složku</button>
-  </form>
-  {% endif %}
+  <div style="display:flex;align-items:center;gap:14px">
+    {% if firma.dok_index_bezi %}
+    <span class="btn btn-ghost" style="cursor:default">⏳ Indexace probíhá… (obnov stránku)</span>
+    {% else %}
+    <form method="post" action="{{ url_for('main.operativa_index_dokumenty', id=firma.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">⬇ {{ 'Aktualizovat databázi' if idx_pocet else 'Načíst dokumenty do databáze' }}</button>
+    </form>
+    {% endif %}
+    {% if smi_klient() %}
+    <form method="post" action="{{ url_for('main.operativa_onedrive', id=firma.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="odkaz" value="">
+      <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">Odpojit složku</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 <table>
   <thead><tr><th>Název</th><th style="text-align:right">Velikost</th><th>Změněno</th><th></th></tr></thead>

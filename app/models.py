@@ -27,6 +27,7 @@ class Firma(db.Model):
     rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
     aktivni      = db.Column(db.Boolean, default=True)     # aktivní / neaktivní klient
     onedrive_odkaz = db.Column(db.String(800), nullable=True)  # odkaz na složku klienta v OneDrive/SharePoint
+    dok_index_bezi = db.Column(db.Boolean, default=False)      # probíhá indexace dokumentů na pozadí
 
     zakazky  = db.relationship("Zakazka", back_populates="firma", lazy=True)
     kontakty = db.relationship("Kontakt", back_populates="firma", lazy=True,
@@ -118,6 +119,21 @@ class KlientDokument(db.Model):
     text      = db.Column(db.Text)                      # extrahovaný text
     updated   = db.Column(db.String(40))
     firma     = db.relationship("Firma")
+    chunky    = db.relationship("DokumentChunk", backref="dokument", lazy=True,
+                                cascade="all, delete-orphan")
+
+
+class DokumentChunk(db.Model):
+    """Část dokumentu (chunk) + embedding (JSON) pro sémantické hledání nad dokumenty klienta."""
+    __tablename__ = "dokument_chunk"
+    id          = db.Column(db.Integer, primary_key=True)
+    dokument_id = db.Column(db.Integer, db.ForeignKey("klient_dokument.id"), nullable=False, index=True)
+    firma_id    = db.Column(db.Integer, index=True)
+    nazev       = db.Column(db.String(400))   # název zdrojového souboru (pro citaci)
+    web_url     = db.Column(db.String(800))
+    pozice      = db.Column(db.Integer, default=0)
+    text        = db.Column(db.Text, nullable=False)
+    embedding   = db.Column(db.Text)          # JSON list floatů (z OpenAI), nebo None
 
 
 class Zakazka(db.Model):

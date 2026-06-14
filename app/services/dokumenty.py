@@ -7,7 +7,7 @@ Originály zůstávají na SharePointu; u nás je jen text pro hledání a (pozd
 from datetime import datetime, timezone
 
 from ..extensions import db
-from . import onedrive, extrakce
+from . import onedrive, extrakce, embeddings
 
 MAX_BAJTU = 25 * 1024 * 1024  # nečteme soubory větší než 25 MB
 
@@ -42,13 +42,38 @@ def index_klienta(firma):
         d.text = text
         d.updated = ted
         db.session.add(d)
+        db.session.flush()  # potřebujeme d.id pro chunky
+        embeddings.reindex_dokument(d)
         indexovano += 1
+        if indexovano % 5 == 0:   # průběžné ukládání (vidět postup, neztratit při pádu)
+            db.session.commit()
     # odstraň záznamy souborů, které už ve složce nejsou
     for item_id, d in existujici.items():
         if item_id not in videno:
             db.session.delete(d)
     db.session.commit()
     return indexovano, len(soubory), None
+
+
+def index_klienta_async(app, firma_id):
+    """Spustí indexaci na pozadí (mimo webový request) — nastaví/sundá příznak běhu."""
+    from ..models import Firma
+    with app.app_context():
+        firma = Firma.query.get(firma_id)
+        if not firma:
+            return
+        firma.dok_index_bezi = True
+        db.session.commit()
+        try:
+            index_klienta(firma)
+        except Exception as e:
+            print(f"[dokumenty] async index: {e}")
+            db.session.rollback()
+        finally:
+            firma = Firma.query.get(firma_id)
+            if firma:
+                firma.dok_index_bezi = False
+                db.session.commit()
 
 
 def stav(firma_id):
