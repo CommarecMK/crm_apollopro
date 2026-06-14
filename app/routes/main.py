@@ -189,16 +189,27 @@ def sso_vstup():
         return redirect(portal + "/login")
     # Portálová role superadmin → kokpit admin (jinak default majitel)
     je_superadmin = udaje.get("role") == "superadmin"
+    email = (udaje.get("email") or "").strip().lower()
+    # 1) zkus existující portálový účet (podle sso_id)
     u = User.query.filter_by(sso_id=udaje.get("id")).first()
+    # 2) jinak spáruj s existujícím účtem podle e-mailu (žádné duplikáty)
+    if not u and email:
+        u = User.query.filter_by(email=email).first()
+        if u:
+            u.sso_id = udaje.get("id")
+    # 3) teprve když nic nenajdeme, založ nový
     if not u:
-        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"),
+        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"), email=email or None,
                  role="admin" if je_superadmin else "majitel", aktivni=True)
         db.session.add(u)
-        db.session.commit()
-    elif je_superadmin and u.role != "admin":
-        # promotion superadmina z portálu (jeho roli v kokpitu nedegradujeme)
+    # doplň chybějící údaje + promotion superadmina (roli nedegradujeme)
+    if email and not u.email:
+        u.email = email
+    if not u.jmeno:
+        u.jmeno = udaje.get("name")
+    if je_superadmin and u.role != "admin":
         u.role = "admin"
-        db.session.commit()
+    db.session.commit()
     if not u.aktivni:
         return redirect(portal + "/login")
     _prihlas(u)
