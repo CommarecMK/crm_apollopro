@@ -603,9 +603,9 @@ def operativa():
 def operativa_klient(id):
     firma = Firma.query.get_or_404(id)
     ukoly = freelo_service.ukoly_klienta(firma.freelo_tasklist_id)
-    tasklisty = freelo_service.seznam_tasklistu() if not firma.freelo_tasklist_id else []
+    projekty = freelo_service.projekty_s_tasklisty() if not firma.freelo_tasklist_id else []
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
-                           tasklisty=tasklisty, freelo_ok=freelo_service.je_nakonfigurovano())
+                           projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano())
 
 
 @bp.route("/operativa/<int:id>/freelo", methods=["POST"])

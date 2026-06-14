@@ -1,10 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p style="margin-bottom:6px"><a href="{{ url_for('main.operativa') }}">← Operativa</a></p>
-<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-  <h1 style="color:var(--navy);font-size:28px;margin:0">{{ firma.nazev }}</h1>
-  <a class="logout" href="{{ url_for('main.firma_detail', id=firma.id) }}" style="color:var(--cyan-dark)">→ Řízení & finance</a>
-</div>
+<h1 style="color:var(--navy);font-size:28px;margin:0 0 18px">{{ firma.nazev }}</h1>
 
 <!-- Freelo úkoly -->
 <h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Freelo úkoly</h2>
@@ -12,16 +9,32 @@
 <div class="note">Freelo není nakonfigurované (chybí FREELO_EMAIL / FREELO_API_KEY).</div>
 {% elif not firma.freelo_tasklist_id %}
 <div class="stat">
-  <p class="muted" style="font-size:13px;margin-bottom:10px">Napoj klienta na Freelo tasklist:</p>
-  <form method="post" action="{{ url_for('main.operativa_freelo_napojit', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap">
+  <p class="muted" style="font-size:13px;margin-bottom:10px">Napoj klienta na Freelo — nejdřív projekt, pak tasklist:</p>
+  <form method="post" action="{{ url_for('main.operativa_freelo_napojit', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <select name="tasklist_id" style="flex:1;min-width:240px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px">
-      <option value="">— vyber tasklist —</option>
-      {% for tid, popis in tasklisty %}<option value="{{ tid }}">{{ popis }}</option>{% endfor %}
+    {% set sstyl = "min-width:240px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+    <select id="projSel" onchange="naplnTl()" style="{{ sstyl }}">
+      <option value="">— vyber projekt —</option>
+      {% for p in projekty %}<option value="{{ p.id }}">{{ p.nazev }}</option>{% endfor %}
+    </select>
+    <select name="tasklist_id" id="tlSel" style="{{ sstyl }}" disabled>
+      <option value="">— nejdřív projekt —</option>
     </select>
     <button class="btn" type="submit">Napojit</button>
   </form>
+  {% if not projekty %}<p class="muted" style="font-size:12px;margin-top:8px">Žádné Freelo projekty (zkontroluj napojení Freelo).</p>{% endif %}
 </div>
+<script>
+const PROJEKTY = {{ projekty|tojson }};
+function naplnTl(){
+  const pid = document.getElementById('projSel').value;
+  const tl = document.getElementById('tlSel');
+  tl.innerHTML = '<option value="">— vyber tasklist —</option>';
+  const p = PROJEKTY.find(x => String(x.id) === String(pid));
+  if(p){ p.tasklisty.forEach(t => { const o=document.createElement('option'); o.value=t.id; o.textContent=t.nazev; tl.appendChild(o); }); tl.disabled=false; }
+  else { tl.disabled=true; }
+}
+</script>
 {% else %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
   <span class="muted" style="font-size:13px">{{ ukoly.open_count }} otevřených úkolů</span>

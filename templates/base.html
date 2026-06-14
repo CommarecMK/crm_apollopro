@@ -116,7 +116,6 @@
     <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
       {% if operativa_mode %}
         <a class="logout" href="{{ url_for('main.operativa') }}">Klienti</a>
-        <a class="logout" href="{{ url_for('main.prehled') }}" style="color:var(--cyan)">↔ Řízení &amp; finance</a>
       {% else %}
         <a class="logout" href="{{ url_for('main.prehled') }}">Přehled</a>
         <a class="logout" href="{{ url_for('main.dashboard') }}">Stav zakázek</a>
@@ -125,7 +124,6 @@
         {% if vidi_finance() %}<a class="logout" href="{{ url_for('main.cashflow') }}">Cashflow</a>
         <a class="logout" href="{{ url_for('main.pm_prehled') }}">PM</a>{% endif %}
         {% if je_admin() %}<a class="logout" href="{{ url_for('main.admin_uzivatele') }}">Uživatelé</a>{% endif %}
-        <a class="logout" href="{{ url_for('main.operativa') }}" style="color:var(--cyan)">↔ Operativa</a>
       {% endif %}
       <span class="sub">{{ session.get('user_name') }}</span>
       <a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>
@@ -138,5 +136,15 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </div>
+  {% if session.get('user_id') %}
+  <footer style="text-align:center;padding:24px;color:#99a;font-size:12px">
+    {% if request.path.startswith('/operativa') %}
+      <a href="{{ url_for('main.prehled') }}" style="color:#778">Přepnout na Řízení &amp; finance</a>
+    {% else %}
+      <a href="{{ url_for('main.operativa') }}" style="color:#778">Přepnout na Operativu</a>
+    {% endif %}
+    · <a href="https://apollopro.io" style="color:#778">Apollo Pro portál</a> · Commarec
+  </footer>
+  {% endif %}
 </body>
 </html>

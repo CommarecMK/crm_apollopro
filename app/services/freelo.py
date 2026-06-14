@@ -40,6 +40,27 @@ def seznam_tasklistu():
         return []
 
 
+def projekty_s_tasklisty():
+    """Vrátí [{id, nazev, tasklisty:[{id,nazev}]}] pro dvoukrokový výběr (projekt → tasklist)."""
+    if not je_nakonfigurovano():
+        return []
+    try:
+        r = _get("/projects")
+        if r.status_code != 200:
+            return []
+        raw = r.json()
+        projekty = raw if isinstance(raw, list) else raw.get("data", raw.get("projects", []))
+        out = []
+        for p in projekty:
+            tl = [{"id": t.get("id"), "nazev": t.get("name", "")} for t in p.get("tasklists", [])]
+            if tl:
+                out.append({"id": p.get("id"), "nazev": p.get("name", ""), "tasklisty": tl})
+        return sorted(out, key=lambda x: x["nazev"].lower())
+    except Exception as e:
+        print(f"[freelo] projekty: {e}")
+        return []
+
+
 def _uorm(t, hotovo):
     return {"nazev": t.get("name", ""), "hotovo": hotovo,
             "url": f"https://app.freelo.io/task/{t.get('id')}",
