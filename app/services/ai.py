@@ -172,11 +172,13 @@ def odpoved_na_dotaz(firma, dotaz):
     if freelo_ctx:
         casti.append("=== ÚKOLY (FREELO) ===\n" + freelo_ctx)
     if chunky:
-        casti.append("=== DOKUMENTY ===\n" + "\n\n".join(
-            f"[Zdroj {i + 1}: {c['nazev']}]\n{c['text']}" for i, c in enumerate(chunky)))
+        casti.append("=== DOKUMENTY (s datem změny) ===\n" + "\n\n".join(
+            f"[Zdroj {i + 1}: {c['nazev']}" + (f", změněno {c['datum']}" if c.get('datum') else "") + f"]\n{c['text']}"
+            for i, c in enumerate(chunky)))
     system = ("Jsi asistent poradenské firmy Commarec. Odpovídej česky, věcně a stručně. "
               "Vycházej VÝHRADNĚ z poskytnutých podkladů (úkoly z Freela + úryvky z dokumentů klienta). "
               "Můžeš kombinovat obojí. Pokud odpověď v podkladech není, jasně to napiš. "
+              "Dokumenty mají datum změny — když je relevantní (co je nejnovější, co se změnilo), zohledni to a uveď datum. "
               "U klíčových tvrzení z dokumentů odkazuj na zdroj (název souboru). "
               "Na úplný konec přidej na samostatný řádek oddělovač '===NAVRHY===' a pod něj 3 stručné "
               "návazné otázky (každou na svůj řádek, bez číslování), které dávají smysl k prohloubení tématu u tohoto klienta.")
@@ -196,5 +198,5 @@ def odpoved_na_dotaz(firma, dotaz):
     for c in chunky:
         if c["nazev"] not in videno:
             videno.add(c["nazev"])
-            zdroje.append({"nazev": c["nazev"], "web_url": c["web_url"]})
+            zdroje.append({"nazev": c["nazev"], "web_url": c["web_url"], "datum": c.get("datum", "")})
     return {"odpoved": odp, "zdroje": zdroje[:8], "navrhy": navrhy[:3], "chyba": None}

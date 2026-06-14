@@ -110,6 +110,14 @@ def hledat_relevantni(firma_id, dotaz, top_k=12):
     chunky = DokumentChunk.query.filter_by(firma_id=firma_id).all()
     if not chunky:
         return []
+    def _dat(c):
+        try:
+            return (c.dokument.soubor_zmeneno or c.dokument.updated or "")[:10] if c.dokument else ""
+        except Exception:
+            return ""
+
+    def _out(c):
+        return {"text": c.text, "nazev": c.nazev, "web_url": c.web_url, "datum": _dat(c)}
     q_emb = vytvorit_embedding(dotaz)
     s_emby = [c for c in chunky if c.embedding]
     if q_emb is not None and s_emby:
@@ -124,7 +132,7 @@ def hledat_relevantni(firma_id, dotaz, top_k=12):
             except Exception:
                 continue
         skore.sort(key=lambda x: -x[0])
-        return [{"text": c.text, "nazev": c.nazev, "web_url": c.web_url} for _, c in skore[:top_k]]
+        return [_out(c) for _, c in skore[:top_k]]
     # Fulltext fallback
     slova = [s.lower() for s in re.findall(r"\w{3,}", dotaz)]
     scored = []
@@ -135,4 +143,4 @@ def hledat_relevantni(firma_id, dotaz, top_k=12):
             scored.append((sk, c))
     scored.sort(key=lambda x: -x[0])
     vyber = [c for _, c in scored[:top_k]] or chunky[:top_k]
-    return [{"text": c.text, "nazev": c.nazev, "web_url": c.web_url} for c in vyber]
+    return [_out(c) for c in vyber]

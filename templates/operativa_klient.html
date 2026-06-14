@@ -38,7 +38,7 @@
     <div class="a">Ptej se na cokoli z dokumentů i z úkolů ve Freelu. Odpovím a doložím zdroje.</div>
   </div>
   <div id="chatPilulky" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-    {% for p in ['Shrň aktuální stav klienta','Co je po termínu a u koho?','Na co si dát pozor / rizika?','Co bylo dohodnuto na posledních jednáních?'] %}
+    {% for p in ['Shrň aktuální stav klienta','Co je po termínu a u koho?','Na co si dát pozor / rizika?','Co bylo dohodnuto na posledních jednáních?','Co je v dokumentech nejnovější / co se změnilo?'] %}
     <span class="pill" data-q="{{ p }}">{{ p }}</span>{% endfor %}
   </div>
   <form class="vstup" id="chatForm" data-noload>
@@ -64,7 +64,7 @@
       const r=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({dotaz:q})});
       const j=await r.json();
       let html=md(j.odpoved||j.chyba||'Bez odpovědi.');
-      if(j.zdroje&&j.zdroje.length){html+='<div class="zdroje">'+j.zdroje.map(z=>'<a href="'+(z.web_url||'#')+'" target="_blank">📄 '+esc(z.nazev)+'</a>').join('')+'</div>';}
+      if(j.zdroje&&j.zdroje.length){html+='<div class="zdroje">'+j.zdroje.map(z=>'<a href="'+(z.web_url||'#')+'" target="_blank">📄 '+esc(z.nazev)+(z.datum?' · '+z.datum:'')+'</a>').join('')+'</div>';}
       a.innerHTML=html;
       if(j.navrhy&&j.navrhy.length){
         const nd=document.createElement('div'); nd.className='navrhy';
