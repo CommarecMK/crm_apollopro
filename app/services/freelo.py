@@ -290,9 +290,9 @@ def subtasks(task_id):
         return []
 
 
-def priradit(task_id, worker_id):
+def priradit(task_id, worker_id, auth=None):
     try:
-        r = requests.post(f"{BASE}/task/{task_id}", auth=(FREELO_EMAIL, FREELO_API_KEY),
+        r = requests.post(f"{BASE}/task/{task_id}", auth=_auth(auth),
                           headers=_hlavicky(), json={"worker": int(worker_id)}, timeout=TIMEOUT)
         if r.status_code in (200, 201):
             _CACHE.clear()  # ať se změna hned projeví
@@ -303,9 +303,16 @@ def priradit(task_id, worker_id):
         return False
 
 
-def _post_akce(path):
+def _auth(auth=None):
+    """Vrátí (email, key) — buď osobní klíč přihlášeného, nebo sdílený z env."""
+    if auth and auth[0] and auth[1]:
+        return auth
+    return (FREELO_EMAIL, FREELO_API_KEY)
+
+
+def _post_akce(path, auth=None):
     try:
-        r = requests.post(f"{BASE}{path}", auth=(FREELO_EMAIL, FREELO_API_KEY),
+        r = requests.post(f"{BASE}{path}", auth=_auth(auth),
                           headers=_hlavicky(), timeout=TIMEOUT)
         if r.status_code in (200, 201):
             _CACHE.clear()
@@ -316,19 +323,19 @@ def _post_akce(path):
         return False
 
 
-def dokoncit(task_id):
+def dokoncit(task_id, auth=None):
     """Označit úkol jako hotový (POST /task/{id}/finish)."""
-    return _post_akce(f"/task/{task_id}/finish")
+    return _post_akce(f"/task/{task_id}/finish", auth)
 
 
-def znovu_otevrit(task_id):
+def znovu_otevrit(task_id, auth=None):
     """Znovu otevřít hotový úkol (POST /task/{id}/activate)."""
-    return _post_akce(f"/task/{task_id}/activate")
+    return _post_akce(f"/task/{task_id}/activate", auth)
 
 
-def pridej_komentar(task_id, text):
+def pridej_komentar(task_id, text, auth=None):
     try:
-        r = requests.post(f"{BASE}/task/{task_id}/comments", auth=(FREELO_EMAIL, FREELO_API_KEY),
+        r = requests.post(f"{BASE}/task/{task_id}/comments", auth=_auth(auth),
                           headers=_hlavicky(), json={"content": text}, timeout=TIMEOUT)
         if r.status_code in (200, 201):
             _CACHE.clear()

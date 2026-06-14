@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px;background:#fff;width:100%;max-width:420px" %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Můj účet</h1>
+<p class="muted" style="margin-bottom:20px">{{ u.email or u.jmeno }} · role {{ u.role }}</p>
+
+<div class="stat" style="max-width:520px">
+  <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:8px">Moje Freelo napojení</h3>
+  <p class="muted" style="font-size:13px;margin-bottom:14px">
+    Zadej svůj vlastní Freelo e-mail a API klíč. Pak se tvoje <b>komentáře, uzavírání úkolů a přiřazování</b>
+    budou ve Freelu zapisovat <b>pod tvým jménem</b> (ne pod sdíleným účtem). Klíč najdeš ve Freelu v Nastavení → API.
+  </p>
+  <form method="post" action="{{ url_for('main.muj_ucet') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600;margin-bottom:3px">Freelo e-mail</div>
+      <input type="email" name="freelo_email" value="{{ u.freelo_email or '' }}" placeholder="jan@commarec.cz" style="{{ istyl }}">
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600;margin-bottom:3px">
+        API klíč {% if u.freelo_api_key %}<span style="color:var(--green)">· nastaveno ✓</span>{% endif %}
+      </div>
+      <input type="password" name="freelo_api_key" placeholder="{{ '•••••••• (ponechat beze změny)' if u.freelo_api_key else 'vlož API klíč' }}" style="{{ istyl }}">
+    </div>
+    {% if u.freelo_api_key %}
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px">
+      <input type="checkbox" name="smazat_klic"> Odebrat můj klíč (zápisy půjdou přes sdílený účet)
+    </label>
+    {% endif %}
+    <button class="btn" type="submit">Uložit</button>
+  </form>
+</div>
+{% endblock %}

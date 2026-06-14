@@ -4,7 +4,8 @@
 
 <p style="margin-bottom:6px"><a href="{{ url_for('main.admin_hub') }}">← Administrace</a></p>
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Uživatelé &amp; role</h1>
-<p class="muted" style="margin-bottom:20px">U každého uživatele nastav roli, ta určí, co smí v aplikaci dělat (viz tabulka dole).</p>
+<p class="muted" style="margin-bottom:20px">U každého uživatele nastav roli, ta určí, co smí v aplikaci dělat (viz tabulka dole).
+  Vlastní Freelo klíč si každý nastaví sám v <b>Můj účet</b> (kvůli bezpečnosti ho nezadáváš za kolegy) — „Freelo ✓" značí, že ho má vyplněný.</p>
 
 <style>
   .urow{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08);
@@ -25,6 +26,7 @@
   <div class="em">
     {{ u.email or '— (jen portál)' }}
     {% if u.sso_id %}<span class="tag" style="margin-left:6px">portál</span>{% endif %}
+    {% if u.ma_freelo %}<span class="tag" style="margin-left:6px;background:#e6f7ec;color:#1a7f43">Freelo ✓</span>{% endif %}
     <small>{{ u.jmeno or 'bez jména' }}</small>
   </div>
   <form method="post" action="{{ url_for('main.admin_uzivatel_upravit', id=u.id) }}"

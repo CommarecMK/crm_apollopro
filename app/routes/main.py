@@ -732,10 +732,18 @@ def ukol_detail(task_id):
                            komentare=detail.get("komentare", []), podukoly=podukoly)
 
 
+def _moje_freelo():
+    """(email, key) přihlášeného uživatele pro zápisy pod jeho autorstvím; jinak None (sdílený klíč)."""
+    u = User.query.get(session.get("user_id"))
+    if u and u.freelo_email and u.freelo_api_key:
+        return (u.freelo_email, u.freelo_api_key)
+    return None
+
+
 @bp.route("/operativa/ukol/<int:task_id>/prirad", methods=["POST"])
 @login_required
 def ukol_prirad(task_id):
-    ok = freelo_service.priradit(task_id, request.form.get("worker_id", ""))
+    ok = freelo_service.priradit(task_id, request.form.get("worker_id", ""), auth=_moje_freelo())
     flash("Řešitel přiřazen." if ok else "Přiřazení se nepovedlo (ověř Freelo).", "info" if ok else "error")
     return redirect(url_for("main.ukol_detail", task_id=task_id))
 
@@ -743,7 +751,7 @@ def ukol_prirad(task_id):
 @bp.route("/operativa/ukol/<int:task_id>/dokoncit", methods=["POST"])
 @login_required
 def ukol_dokoncit(task_id):
-    ok = freelo_service.dokoncit(task_id)
+    ok = freelo_service.dokoncit(task_id, auth=_moje_freelo())
     flash("Úkol označen jako hotový." if ok else "Úkol se nepovedlo uzavřít.", "info" if ok else "error")
     return redirect(url_for("main.ukol_detail", task_id=task_id))
 
@@ -751,7 +759,7 @@ def ukol_dokoncit(task_id):
 @bp.route("/operativa/ukol/<int:task_id>/otevrit", methods=["POST"])
 @login_required
 def ukol_otevrit(task_id):
-    ok = freelo_service.znovu_otevrit(task_id)
+    ok = freelo_service.znovu_otevrit(task_id, auth=_moje_freelo())
     flash("Úkol znovu otevřen." if ok else "Úkol se nepovedlo otevřít.", "info" if ok else "error")
     return redirect(url_for("main.ukol_detail", task_id=task_id))
 
@@ -761,9 +769,26 @@ def ukol_otevrit(task_id):
 def ukol_komentar(task_id):
     text = request.form.get("text", "").strip()
     if text:
-        ok = freelo_service.pridej_komentar(task_id, text)
+        ok = freelo_service.pridej_komentar(task_id, text, auth=_moje_freelo())
         flash("Komentář přidán." if ok else "Komentář se nepovedl.", "info" if ok else "error")
     return redirect(url_for("main.ukol_detail", task_id=task_id))
+
+
+@bp.route("/muj-ucet", methods=["GET", "POST"])
+@login_required
+def muj_ucet():
+    u = User.query.get(session["user_id"])
+    if request.method == "POST":
+        u.freelo_email = request.form.get("freelo_email", "").strip() or None
+        novy = request.form.get("freelo_api_key", "").strip()
+        if request.form.get("smazat_klic"):
+            u.freelo_api_key = None
+        elif novy:
+            u.freelo_api_key = novy
+        db.session.commit()
+        flash("Uloženo.", "info")
+        return redirect(url_for("main.muj_ucet"))
+    return render_template("muj_ucet.html", u=u)
 
 
 @bp.route("/diagnostika/freelo")

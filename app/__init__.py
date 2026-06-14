@@ -102,6 +102,10 @@ def _inline_migrace():
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",
             },
+            "uzivatel": {
+                "freelo_email": "VARCHAR(160)",
+                "freelo_api_key": "VARCHAR(255)",
+            },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",
                 "projektovy_manazer": "VARCHAR(120)",

@@ -60,6 +60,13 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=True)
     role          = db.Column(db.String(20), default="majitel")  # admin | editor | majitel
     aktivni       = db.Column(db.Boolean, default=True)
+    # Vlastní Freelo přístup (zápisy pod správným autorem). Klíč je osobní tajemství.
+    freelo_email   = db.Column(db.String(160), nullable=True)
+    freelo_api_key = db.Column(db.String(255), nullable=True)
+
+    @property
+    def ma_freelo(self):
+        return bool(self.freelo_email and self.freelo_api_key)
 
     @property
     def smi_zakazky(self):

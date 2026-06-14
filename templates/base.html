@@ -133,7 +133,7 @@
         <span style="color:#3a5481">|</span>
         <a class="logout" href="{{ url_for('main.admin_hub') }}" style="color:var(--cyan)">⚙ Admin</a>
       {% endif %}
-      <span class="sub">{{ session.get('user_name') }}</span>
+      <a class="logout" href="{{ url_for('main.muj_ucet') }}" style="color:var(--grey)">{{ session.get('user_name') }}</a>
       <a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>
     </div>
     {% endif %}
