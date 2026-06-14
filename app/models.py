@@ -29,6 +29,7 @@ class Firma(db.Model):
     onedrive_odkaz = db.Column(db.String(800), nullable=True)  # odkaz na složku klienta v OneDrive/SharePoint
     dok_index_bezi = db.Column(db.Boolean, default=False)      # probíhá indexace dokumentů na pozadí
     dok_index_progress = db.Column(db.String(60), nullable=True)  # postup, např. "12 / 80"
+    dok_index_celkem = db.Column(db.Integer, default=0)           # počet souborů ke zpracování ve složce
 
     zakazky  = db.relationship("Zakazka", back_populates="firma", lazy=True)
     kontakty = db.relationship("Kontakt", back_populates="firma", lazy=True,

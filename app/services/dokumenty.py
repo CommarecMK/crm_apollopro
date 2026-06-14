@@ -28,6 +28,8 @@ def index_klienta(firma):
     # jen soubory, které umíme přečíst a nejsou obří
     kandidati = [s for s in soubory if extrakce.lze_extrahovat(s["nazev"]) and (s["velikost"] or 0) <= MAX_BAJTU]
     celkem_k = len(kandidati)
+    firma.dok_index_celkem = celkem_k
+    db.session.commit()
     indexovano = 0
     for s in kandidati:
         obsah = onedrive.stahni(drive_id, s["id"])

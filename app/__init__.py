@@ -104,6 +104,7 @@ def _inline_migrace():
                 "onedrive_odkaz": "VARCHAR(800)",
                 "dok_index_bezi": "BOOLEAN DEFAULT FALSE",
                 "dok_index_progress": "VARCHAR(60)",
+                "dok_index_celkem": "INTEGER DEFAULT 0",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",

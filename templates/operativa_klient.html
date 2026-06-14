@@ -50,16 +50,28 @@
 })();
 </script>
 
-<!-- Statistiky klienta -->
-{% if souhrn %}
-<div class="stats" style="margin-bottom:18px">
-  <div class="stat"><div class="num">{{ souhrn.open }}</div><div class="lbl">Otevřených úkolů</div></div>
-  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if souhrn.po_terminu else 'var(--navy)' }}">{{ souhrn.po_terminu }}</div><div class="lbl">Po termínu</div></div>
-  <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if souhrn.bez_reakce else 'var(--navy)' }}">{{ souhrn.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
-  <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.hotovo }}</div><div class="lbl">Hotových</div></div>
-  <div class="stat"><div class="num">{{ idx_pocet }}</div><div class="lbl">Dokumentů v DB</div></div>
+<!-- Statistiky klienta (oddělené skupiny) -->
+<style>.grp{font-family:'Druk Condensed Super','Montserrat',sans-serif;font-weight:800;text-transform:uppercase;
+  letter-spacing:.04em;font-size:12px;color:var(--cyan-dark);margin:0 0 6px 2px}</style>
+<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-bottom:18px">
+  {% if souhrn %}
+  <div style="flex:1;min-width:300px">
+    <div class="grp">✦ Freelo úkoly</div>
+    <div class="stats" style="margin:0">
+      <div class="stat"><div class="num">{{ souhrn.open }}</div><div class="lbl">Otevřených</div></div>
+      <div class="stat"><div class="num" style="color:{{ 'var(--red)' if souhrn.po_terminu else 'var(--navy)' }}">{{ souhrn.po_terminu }}</div><div class="lbl">Po termínu</div></div>
+      <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if souhrn.bez_reakce else 'var(--navy)' }}">{{ souhrn.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
+      <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.hotovo }}</div><div class="lbl">Hotových</div></div>
+    </div>
+  </div>
+  {% endif %}
+  <div style="{{ 'flex:0 0 auto' if souhrn else 'flex:1' }}">
+    <div class="grp">📄 Dokumenty</div>
+    <div class="stats" style="margin:0">
+      <div class="stat"><div class="num">{{ idx_pocet }}{% if firma.dok_index_celkem %} / {{ firma.dok_index_celkem }}{% endif %}</div><div class="lbl">Načteno v databázi</div></div>
+    </div>
+  </div>
 </div>
-{% endif %}
 
 <style>
   .sek{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08);margin-bottom:14px;overflow:hidden}
@@ -147,7 +159,7 @@ function naplnTl(){
 
 <!-- Dokumenty z OneDrive (sbaleno) -->
 <details class="sek">
-  <summary>Dokumenty <span class="si">{{ idx_pocet }} v databázi{% if firma.onedrive_odkaz %} · složka napojena{% endif %}</span></summary>
+  <summary>Dokumenty <span class="si">{{ idx_pocet }}{% if firma.dok_index_celkem %} / {{ firma.dok_index_celkem }}{% endif %} načteno{% if firma.onedrive_odkaz %} · složka napojena{% endif %}</span></summary>
   <div class="telo">
 {% if not onedrive_ok %}
 <div class="note">OneDrive zatím není nakonfigurovaný (chybí Microsoft Graph přístup).</div>
