@@ -48,25 +48,24 @@ function naplnTl(){
   </form>
 </div>
 <table>
-  <thead><tr><th>Úkol</th><th>Řešitel</th><th>Termín</th><th style="text-align:center">Stav</th></tr></thead>
+  <thead><tr><th>Úkol</th><th>Řešitel</th><th>Termín</th><th style="text-align:center">Podúkoly</th><th style="text-align:center">Stav</th></tr></thead>
   <tbody>
     {% for u in ukoly.aktivni %}
     <tr><td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a>
-        <div class="muted" style="font-size:11px">
-          {% if u.dni_od_iterace is not none %}poslední reakce před {{ u.dni_od_iterace }} dny{% endif %}
-          {% if u.podukolu %}{% if u.dni_od_iterace is not none %} · {% endif %}{{ u.podukolu }} podúkolů{% endif %}
-        </div></td>
+        {% if u.dni_od_iterace is not none %}<div class="muted" style="font-size:11px">poslední reakce před {{ u.dni_od_iterace }} dny</div>{% endif %}</td>
       <td>{{ u.resitel or '—' }}</td>
       <td style="color:{{ 'var(--red)' if u.termin else 'inherit' }}">{{ u.termin or '—' }}</td>
+      <td style="text-align:center">{% if u.podukolu %}<span class="tag">{{ u.podukolu }}</span>{% else %}—{% endif %}</td>
       <td style="text-align:center"><span class="dot oranzova"></span>otevřený</td></tr>
     {% endfor %}
     {% for u in ukoly.hotove %}
     <tr style="opacity:.6"><td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a></td><td>{{ u.resitel or '—' }}</td>
       <td>{{ u.termin or '—' }}</td>
+      <td style="text-align:center">{% if u.podukolu %}<span class="tag">{{ u.podukolu }}</span>{% else %}—{% endif %}</td>
       <td style="text-align:center"><span class="dot zelena"></span>hotovo</td></tr>
     {% endfor %}
     {% if not ukoly.aktivni and not ukoly.hotove %}
-    <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Žádné úkoly v tomto tasklistu.</td></tr>
+    <tr><td colspan="5" class="muted" style="text-align:center;padding:18px">Žádné úkoly v tomto tasklistu.</td></tr>
     {% endif %}
   </tbody>
 </table>
