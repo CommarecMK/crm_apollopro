@@ -71,9 +71,62 @@ function naplnTl(){
 </table>
 {% endif %}
 
+<!-- Dokumenty z OneDrive -->
+<h2 style="color:var(--navy);font-size:18px;margin:28px 0 10px">Dokumenty (OneDrive)</h2>
+{% if not onedrive_ok %}
+<div class="note">OneDrive zatím není nakonfigurovaný (chybí Microsoft Graph přístup).</div>
+{% elif not firma.onedrive_odkaz %}
+  {% if not smi_klient() %}
+  <div class="note">Klient nemá napojenou složku. Napojení provede admin, editor nebo majitel.</div>
+  {% else %}
+  <div class="stat">
+    <p class="muted" style="font-size:13px;margin-bottom:10px">Vlož odkaz na složku klienta v OneDrive/SharePointu (ve OneDrive: u složky „Sdílet" → kopírovat odkaz):</p>
+    <form method="post" action="{{ url_for('main.operativa_onedrive', id=firma.id) }}" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="url" name="odkaz" placeholder="https://…sharepoint.com/…" required
+             style="flex:1;min-width:320px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+      <button class="btn" type="submit">Napojit složku</button>
+    </form>
+  </div>
+  {% endif %}
+{% elif dok is none %}
+<div class="note" style="border-left-color:var(--red)">Složku se nepodařilo načíst (ověř odkaz nebo oprávnění). <a href="{{ firma.onedrive_odkaz }}" target="_blank">Otevřít na OneDrive ↗</a></div>
+{% else %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span class="muted" style="font-size:13px">
+    {% if podslozka %}<a href="{{ url_for('main.operativa_klient', id=firma.id) }}">← zpět na kořen složky</a>{% else %}{{ dok.polozky|length }} položek{% endif %}
+  </span>
+  {% if smi_klient() %}
+  <form method="post" action="{{ url_for('main.operativa_onedrive', id=firma.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="odkaz" value="">
+    <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">Odpojit složku</button>
+  </form>
+  {% endif %}
+</div>
+<table>
+  <thead><tr><th>Název</th><th style="text-align:right">Velikost</th><th>Změněno</th><th></th></tr></thead>
+  <tbody>
+    {% for p in dok.polozky %}
+    <tr>
+      <td>
+        {% if p.je_slozka %}📁 <a href="{{ url_for('main.operativa_klient', id=firma.id, slozka=p.id) }}">{{ p.nazev }}</a>
+          <span class="muted" style="font-size:11px">{{ p.pocet or 0 }} položek</span>
+        {% else %}📄 {{ p.nazev }}{% endif %}
+      </td>
+      <td style="text-align:right">{{ (p.velikost / 1024)|round|int }} kB</td>
+      <td>{{ p.zmeneno or '—' }}</td>
+      <td style="text-align:right">{% if p.web_url %}<a href="{{ p.web_url }}" target="_blank">otevřít ↗</a>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted" style="text-align:center;padding:16px">Prázdná složka.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 <!-- Připravované sekce operativy -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px">
-  {% for nazev, popis in [('Dokumenty (OneDrive)','Složky a soubory klienta'),('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy'),('Chat nad klientem','Zeptej se na klienta')] %}
+  {% for nazev, popis in [('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy'),('Chat nad klientem','Zeptej se na klienta')] %}
   <div class="stat" style="opacity:.7">
     <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
     <p class="muted" style="font-size:12px">{{ popis }} — <b>Připravujeme</b></p>

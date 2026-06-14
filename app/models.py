@@ -26,6 +26,7 @@ class Firma(db.Model):
     freelo_tasklist_id = db.Column(db.Integer, nullable=True)  # napojení na Freelo tasklist
     rucne_upraveno = db.Column(db.Boolean, default=False)  # zámek proti přepisu z MERK
     aktivni      = db.Column(db.Boolean, default=True)     # aktivní / neaktivní klient
+    onedrive_odkaz = db.Column(db.String(800), nullable=True)  # odkaz na složku klienta v OneDrive/SharePoint
 
     zakazky  = db.relationship("Zakazka", back_populates="firma", lazy=True)
     kontakty = db.relationship("Kontakt", back_populates="firma", lazy=True,

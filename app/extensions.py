@@ -16,3 +16,7 @@ ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 FREELO_EMAIL          = os.environ.get("FREELO_EMAIL", "")
 FREELO_API_KEY        = os.environ.get("FREELO_API_KEY", "")
 CRON_KEY              = os.environ.get("CRON_KEY", "")  # token pro denní obnovu snapshotu
+# Microsoft Graph (OneDrive/SharePoint) — app-only přístup k dokumentům klientů
+GRAPH_TENANT_ID       = os.environ.get("GRAPH_TENANT_ID", "")
+GRAPH_CLIENT_ID       = os.environ.get("GRAPH_CLIENT_ID", "")
+GRAPH_CLIENT_SECRET   = os.environ.get("GRAPH_CLIENT_SECRET", "")

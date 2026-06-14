@@ -98,6 +98,7 @@ def _inline_migrace():
                 "aktivni": "BOOLEAN DEFAULT TRUE",
                 "projektovy_manazer": "VARCHAR(120)",
                 "freelo_tasklist_id": "INTEGER",
+                "onedrive_odkaz": "VARCHAR(800)",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",

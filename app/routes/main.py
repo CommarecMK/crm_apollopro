@@ -124,7 +124,7 @@ def _jen_interni(q):
 from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
 from ..services import (clockify, firmy as firmy_service, snapshot,
-                        freelo as freelo_service, snapshot_freelo)
+                        freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service)
 
 bp = Blueprint("main", __name__)
 
@@ -703,8 +703,30 @@ def operativa_klient(id):
     firma = Firma.query.get_or_404(id)
     ukoly = freelo_service.ukoly_klienta(firma.freelo_tasklist_id)
     projekty = freelo_service.projekty_s_tasklisty() if not firma.freelo_tasklist_id else []
+    # Dokumenty z OneDrive (pokud je napojeno a klient má odkaz)
+    dok = None
+    if onedrive_service.je_nakonfigurovano() and firma.onedrive_odkaz:
+        dok = onedrive_service.vypis_slozky_klienta(firma.onedrive_odkaz, request.args.get("slozka"))
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
-                           projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano())
+                           projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano(),
+                           onedrive_ok=onedrive_service.je_nakonfigurovano(), dok=dok,
+                           podslozka=request.args.get("slozka"))
+
+
+@bp.route("/operativa/<int:id>/onedrive", methods=["POST"])
+@klient_required
+def operativa_onedrive(id):
+    firma = Firma.query.get_or_404(id)
+    firma.onedrive_odkaz = request.form.get("odkaz", "").strip() or None
+    db.session.commit()
+    flash("Odkaz na OneDrive uložen." if firma.onedrive_odkaz else "Odkaz odebrán.", "info")
+    return redirect(url_for("main.operativa_klient", id=id))
+
+
+@bp.route("/diagnostika/onedrive")
+@login_required
+def diagnostika_onedrive():
+    return jsonify(onedrive_service.diagnostika(request.args.get("odkaz", "")))
 
 
 @bp.route("/operativa/<int:id>/freelo", methods=["POST"])
