@@ -127,7 +127,10 @@
         <a class="logout" href="{{ url_for('main.interni') }}">Interní</a>
         {% if vidi_finance() %}<a class="logout" href="{{ url_for('main.cashflow') }}">Cashflow</a>
         <a class="logout" href="{{ url_for('main.pm_prehled') }}">PM</a>{% endif %}
-        {% if je_admin() %}<a class="logout" href="{{ url_for('main.admin_uzivatele') }}">Uživatelé</a>{% endif %}
+      {% endif %}
+      {% if je_admin() %}
+        <span style="color:#3a5481">|</span>
+        <a class="logout" href="{{ url_for('main.admin_hub') }}" style="color:var(--cyan)">⚙ Admin</a>
       {% endif %}
       <span class="sub">{{ session.get('user_name') }}</span>
       <a class="logout" href="{{ url_for('main.logout') }}">Odhlásit</a>

@@ -1,53 +1,95 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 style="color:var(--navy);font-size:30px;margin-bottom:18px">Uživatelé</h1>
+{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px;background:#fff" %}
 
-{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px" %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.admin_hub') }}">← Administrace</a></p>
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Uživatelé &amp; role</h1>
+<p class="muted" style="margin-bottom:20px">U každého uživatele nastav roli, ta určí, co smí v aplikaci dělat (viz tabulka dole).</p>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
-  {% for u in uzivatele %}
-  <div class="stat">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <b>{{ u.email or '—' }}</b>
-      {% if u.sso_id %}<span class="tag">portál</span>{% endif %}
-    </div>
-    <form method="post" action="{{ url_for('main.admin_uzivatel_upravit', id=u.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="text" name="jmeno" value="{{ u.jmeno or '' }}" placeholder="Jméno" style="{{ istyl }};width:100%;margin-bottom:8px">
-      <select name="role" style="{{ istyl }};width:100%;margin-bottom:8px">
-        {% for r in ['admin','editor','majitel','interim'] %}
-        <option value="{{ r }}" {{ 'selected' if r==u.role }}>{{ r }}</option>{% endfor %}
-      </select>
-      <input type="password" name="heslo" placeholder="nové heslo (nepovinné)" style="{{ istyl }};width:100%;margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
-        <input type="checkbox" name="aktivni" {{ 'checked' if u.aktivni }}> Aktivní
-      </label>
-      <div style="display:flex;gap:8px">
-        <button class="btn" type="submit">Uložit</button>
-      </div>
-    </form>
-    <form method="post" action="{{ url_for('main.admin_uzivatel_smazat', id=u.id) }}" style="margin-top:8px" onsubmit="return confirm('Smazat uživatele?')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
-    </form>
+<style>
+  .urow{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08);
+        padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .urow .em{font-weight:700;color:var(--navy);min-width:230px;flex:1}
+  .urow .em small{display:block;font-weight:500;color:#99a;font-size:11px}
+  .urow .fld{display:flex;flex-direction:column;gap:3px}
+  .urow .fld span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#99a;font-weight:600}
+  .matrix td,.matrix th{text-align:center}
+  .matrix td:first-child,.matrix th:first-child{text-align:left}
+  .matrix .ok{color:var(--green);font-weight:700}
+  .matrix .no{color:var(--n7)}
+  @media(max-width:860px){.urow .em{min-width:100%}}
+</style>
+
+{% for u in uzivatele %}
+<div class="urow">
+  <div class="em">
+    {{ u.email or '— (jen portál)' }}
+    {% if u.sso_id %}<span class="tag" style="margin-left:6px">portál</span>{% endif %}
+    <small>{{ u.jmeno or 'bez jména' }}</small>
   </div>
-  {% endfor %}
+  <form method="post" action="{{ url_for('main.admin_uzivatel_upravit', id=u.id) }}"
+        style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fld"><span>Jméno</span>
+      <input type="text" name="jmeno" value="{{ u.jmeno or '' }}" style="{{ istyl }};width:150px"></div>
+    <div class="fld"><span>Role</span>
+      <select name="role" style="{{ istyl }};width:230px">
+        {% for r in ['admin','editor','majitel','interim'] %}
+        <option value="{{ r }}" {{ 'selected' if r==u.role }}>{{ role_popis[r] }}</option>{% endfor %}
+      </select></div>
+    <div class="fld"><span>Nové heslo</span>
+      <input type="password" name="heslo" placeholder="nepovinné" style="{{ istyl }};width:140px"></div>
+    <div class="fld"><span>Aktivní</span>
+      <label class="switch"><input type="checkbox" name="aktivni" {{ 'checked' if u.aktivni }}><span class="slider"></span></label></div>
+    <button class="btn" type="submit">Uložit</button>
+  </form>
+  <form method="post" action="{{ url_for('main.admin_uzivatel_smazat', id=u.id) }}" onsubmit="return confirm('Opravdu smazat uživatele {{ u.email or u.jmeno }}?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">Smazat</button>
+  </form>
 </div>
+{% endfor %}
 
-<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Přidat uživatele</h2>
-<form method="post" action="{{ url_for('main.admin_uzivatel_novy') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fff;padding:16px;border-radius:12px">
+<h2 style="color:var(--navy);font-size:18px;margin:26px 0 10px">Přidat uživatele</h2>
+<form method="post" action="{{ url_for('main.admin_uzivatel_novy') }}"
+      style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#fff;padding:16px 18px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="text" name="jmeno" placeholder="Jméno" style="{{ istyl }}">
-  <input type="email" name="email" placeholder="E-mail" required style="{{ istyl }}">
-  <input type="password" name="heslo" placeholder="Heslo" style="{{ istyl }}">
-  <select name="role" style="{{ istyl }}">
-    {% for r in ['majitel','editor','interim','admin'] %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-  </select>
+  <div class="fld"><span style="font-size:10px;text-transform:uppercase;color:#99a;font-weight:600">Jméno</span>
+    <input type="text" name="jmeno" placeholder="Jan Novák" style="{{ istyl }}"></div>
+  <div class="fld"><span style="font-size:10px;text-transform:uppercase;color:#99a;font-weight:600">E-mail</span>
+    <input type="email" name="email" placeholder="jan@commarec.cz" required style="{{ istyl }}"></div>
+  <div class="fld"><span style="font-size:10px;text-transform:uppercase;color:#99a;font-weight:600">Heslo</span>
+    <input type="password" name="heslo" placeholder="heslo" style="{{ istyl }}"></div>
+  <div class="fld"><span style="font-size:10px;text-transform:uppercase;color:#99a;font-weight:600">Role</span>
+    <select name="role" style="{{ istyl }}">
+      {% for r in ['majitel','editor','interim','admin'] %}<option value="{{ r }}">{{ role_popis[r] }}</option>{% endfor %}
+    </select></div>
   <button class="btn" type="submit">+ Přidat</button>
 </form>
 
-<div class="note" style="margin-top:16px">
-  <b>Role:</b>
-  {% for r, popis in role_popis.items() %}<div style="font-size:13px">{{ popis }}</div>{% endfor %}
+<h2 style="color:var(--navy);font-size:18px;margin:26px 0 10px">Co která role umí</h2>
+<div class="tabulka">
+<table class="matrix">
+  <thead><tr>
+    <th>Funkce</th><th>Admin</th><th>Editor</th><th>Majitel</th><th>Interim</th>
+  </tr></thead>
+  <tbody>
+    {% macro radek(nazev, a, e, m, i) %}
+    <tr><td>{{ nazev }}</td>
+      <td class="{{ 'ok' if a else 'no' }}">{{ '✓' if a else '–' }}</td>
+      <td class="{{ 'ok' if e else 'no' }}">{{ '✓' if e else '–' }}</td>
+      <td class="{{ 'ok' if m else 'no' }}">{{ '✓' if m else '–' }}</td>
+      <td class="{{ 'ok' if i else 'no' }}">{{ '✓' if i else '–' }}</td></tr>
+    {% endmacro %}
+    {{ radek('Přihlášení + Operativa (úkoly, dokumenty)', 1,1,1,1) }}
+    {{ radek('Finanční čísla (tržby, Cashflow, PM)', 1,1,1,0) }}
+    {{ radek('Firmy: úpravy, MERK/ARES, napojení Freelo', 1,1,1,0) }}
+    {{ radek('Zakázky a rozpočty: úpravy + Obnovit z Clockify', 1,1,0,0) }}
+    {{ radek('Administrace: uživatelé a nastavení', 1,0,0,0) }}
+  </tbody>
+</table>
 </div>
+<p class="muted" style="font-size:12px;margin-top:8px">
+  Role = balíček oprávnění. Stačí vybrat jednu roli a uživatel automaticky dostane vše označené „✓". Jemnější nastavení po jednotlivých funkcích zatím není potřeba — kdyby přibylo, doplníme.
+</p>
 {% endblock %}
