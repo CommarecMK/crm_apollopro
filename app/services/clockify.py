@@ -55,24 +55,31 @@ def _norm(s):
 
 
 def _seznam(ws, co):
-    """Načte všechny klienty/projekty (vč. pole note). co = 'clients' | 'projects'."""
+    """Načte VŠECHNY klienty/projekty vč. archivních (vč. pole note). co = 'clients' | 'projects'.
+    Clockify defaultně vrací jen aktivní — proto stáhneme aktivní i archivované zvlášť a spojíme."""
     ck = f"seznam:{ws}:{co}"
     c = _cache_get(ck)
     if c is not None:
         return c
-    out, page = [], 1
-    while True:
-        r = requests.get(f"{API}/workspaces/{ws}/{co}",
-                         headers=_headers(), params={"page": page, "page-size": 200},
-                         timeout=TIMEOUT)
-        r.raise_for_status()
-        davka = r.json()
-        if not davka:
-            break
-        out.extend(davka)
-        if len(davka) < 200:
-            break
-        page += 1
+    out, videno = [], set()
+    for archived in ("false", "true"):
+        page = 1
+        while True:
+            r = requests.get(f"{API}/workspaces/{ws}/{co}",
+                             headers=_headers(),
+                             params={"page": page, "page-size": 200, "archived": archived},
+                             timeout=TIMEOUT)
+            r.raise_for_status()
+            davka = r.json()
+            if not davka:
+                break
+            for item in davka:
+                if item.get("id") not in videno:
+                    videno.add(item.get("id"))
+                    out.append(item)
+            if len(davka) < 200:
+                break
+            page += 1
     return _cache_set(ck, out)
 
 

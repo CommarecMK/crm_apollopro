@@ -12,13 +12,15 @@ from ..extensions import db, COMPANY_ICO
 from ..models import Zakazka, Firma, Kontakt, User, Faktura
 
 
-def _napln_faktury(zakazky, mesic_keys):
-    """U zakázek typu 'jednorazovy' nastaví ._faktury = součet faktur ve zvoleném období."""
+def _napln_faktury(zakazky, mesic_keys, vse=False):
+    """U zakázek typu 'jednorazovy' nastaví ._faktury = součet faktur.
+    vse=False → jen faktury ve zvoleném období (pro roční reporty);
+    vse=True  → všechny faktury zakázky (kumulativně, pro detail zakázky/firmy)."""
     keys = set(mesic_keys)
     for z in zakazky:
         if z.typ_rozpoctu == "jednorazovy":
             z._faktury = round(sum(f.castka for f in z.faktury
-                                   if f.datum and f.datum.strftime("%Y-%m") in keys))
+                                   if f.castka and (vse or (f.datum and f.datum.strftime("%Y-%m") in keys))))
 
 
 def _mesicu_mezi(od, do):
@@ -187,29 +189,39 @@ def sso_vstup():
     portal = os.environ.get("PORTAL_URL", "https://apollopro.io")
     if not udaje:
         return redirect(portal + "/login")
-    # Portálová role superadmin → kokpit admin (jinak default majitel)
     je_superadmin = udaje.get("role") == "superadmin"
+    sso_id = udaje.get("id")
     email = (udaje.get("email") or "").strip().lower()
-    # 1) zkus existující portálový účet (podle sso_id)
-    u = User.query.filter_by(sso_id=udaje.get("id")).first()
-    # 2) jinak spáruj s existujícím účtem podle e-mailu (žádné duplikáty)
-    if not u and email:
-        u = User.query.filter_by(email=email).first()
-        if u:
-            u.sso_id = udaje.get("id")
-    # 3) teprve když nic nenajdeme, založ nový
-    if not u:
-        u = User(sso_id=udaje.get("id"), jmeno=udaje.get("name"), email=email or None,
-                 role="admin" if je_superadmin else "majitel", aktivni=True)
-        db.session.add(u)
-    # doplň chybějící údaje + promotion superadmina (roli nedegradujeme)
-    if email and not u.email:
-        u.email = email
-    if not u.jmeno:
-        u.jmeno = udaje.get("name")
-    if je_superadmin and u.role != "admin":
-        u.role = "admin"
-    db.session.commit()
+    try:
+        # 1) přednostně spáruj podle e-mailu (kanonický účet), jinak podle sso_id
+        u = User.query.filter_by(email=email).first() if email else None
+        if not u and sso_id is not None:
+            u = User.query.filter_by(sso_id=sso_id).first()
+        # 2) když nic nenajdeme, založ nový
+        if not u:
+            u = User(jmeno=udaje.get("name"), email=email or None,
+                     role="admin" if je_superadmin else "majitel", aktivni=True)
+            db.session.add(u)
+            db.session.flush()
+        # 3) sso_id přiřaď výhradně tomuto účtu — uvolni ho od případného duplikátu
+        #    (jinak by spadlo na unikátní omezení sso_id)
+        if sso_id is not None:
+            for jiny in User.query.filter(User.sso_id == sso_id, User.id != u.id).all():
+                jiny.sso_id = None
+            db.session.flush()
+            u.sso_id = sso_id
+        # 4) doplň chybějící údaje + promotion superadmina (roli nedegradujeme)
+        if email and not u.email:
+            u.email = email
+        if not u.jmeno:
+            u.jmeno = udaje.get("name")
+        if je_superadmin and u.role != "admin":
+            u.role = "admin"
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[sso] chyba párování: {e}")
+        return redirect(portal + "/login")
     if not u.aktivni:
         return redirect(portal + "/login")
     _prihlas(u)
@@ -750,7 +762,7 @@ def firma_detail(id):
         z._pocet_mesicu = sum(1 for m in range(1, now.month + 1)
                               if not z.datum_od or (now.year, m) >= (z.datum_od.year, z.datum_od.month))
         z._tydny = _tydny_obdobi(z, [(now.year, mm) for mm in range(1, now.month + 1)])
-    _napln_faktury(firma.zakazky, mesice_rok)
+    _napln_faktury(firma.zakazky, mesice_rok, vse=True)
 
     # Graf, KPI a hodiny lidí = aktivní zakázky; u neaktivního klienta (žádná aktivní)
     # ukážeme celou historii (všechny zakázky), ať se hodiny i tržby zobrazí.
@@ -895,7 +907,7 @@ def zakazka_detail(id):
     # KPI/vyčerpání: u fixního projektového kumulativně od začátku projektu, jinak letošní rok
     z.hodiny, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, [f"{now.year}-{m:02d}" for m in mesice])
     z.hodiny_nonbill = round(max(z.hodiny - z.hodiny_bill, 0), 1)
-    _napln_faktury([z], [f"{now.year}-{m:02d}" for m in mesice])
+    _napln_faktury([z], [f"{now.year}-{m:02d}" for m in mesice], vse=True)
 
     def _rozp_mesic(m):
         if z.typ_rozpoctu != "mesicni" or not z.rozpocet_hodin_tyden:

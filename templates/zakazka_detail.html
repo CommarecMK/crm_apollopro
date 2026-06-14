@@ -20,7 +20,7 @@
   <div class="stat"><div class="num">{{ z.rozpocet_hodin_efekt or '—' }}</div><div class="lbl">Rozpočet h (rok)</div></div>
   {% if vidi_finance() %}
   <div class="stat"><div class="num">{{ z.hodinova_sazba|int if z.hodinova_sazba else '—' }}</div><div class="lbl">Sazba Kč/h</div></div>
-  <div class="stat"><div class="num">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržba Kč (rok)</div></div>
+  <div class="stat"><div class="num">{{ "{:,.0f}".format(z.trzba_skutecnost).replace(",", " ") }}</div><div class="lbl">Tržba Kč ({{ 'celkem' if z.typ_rozpoctu == 'jednorazovy' else 'rok' }})</div></div>
   <div class="stat"><div class="num" style="color:var(--red)">{{ "{:,.0f}".format(z.nenaplneny_potencial).replace(",", " ") }}</div><div class="lbl">Nenaplněný potenciál Kč</div></div>
   {% endif %}
 </div>
