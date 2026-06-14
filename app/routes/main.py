@@ -802,6 +802,14 @@ def diagnostika_onedrive():
     return jsonify(onedrive_service.diagnostika(request.args.get("odkaz", "")))
 
 
+@bp.route("/diagnostika/ai")
+@login_required
+def diagnostika_ai():
+    import os
+    return jsonify({**ai_service.test_volani(),
+                    "ma_openai": bool(os.environ.get("OPENAI_API_KEY"))})
+
+
 @bp.route("/operativa/<int:id>/freelo", methods=["POST"])
 @klient_required
 def operativa_freelo_napojit(id):

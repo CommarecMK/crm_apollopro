@@ -4,7 +4,7 @@ Vyžaduje ANTHROPIC_API_KEY (firemní). Retrieval řeší embeddings.hledat_rele
 """
 import os
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
 
 
 def ma_ai():
@@ -12,15 +12,24 @@ def ma_ai():
 
 
 def _claude(system, user, max_tokens=1500):
+    """Vrátí (text, chyba). Při úspěchu chyba=None."""
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         msg = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                      system=system, messages=[{"role": "user", "content": user}])
-        return msg.content[0].text
+        return msg.content[0].text, None
     except Exception as e:
         print(f"[ai] {e}")
-        return None
+        return None, str(e)
+
+
+def test_volani():
+    """Zkušební volání pro diagnostiku."""
+    if not ma_ai():
+        return {"ma_klic": False, "model": MODEL}
+    txt, chyba = _claude("Odpovídej česky.", "Napiš jen slovo: OK", max_tokens=20)
+    return {"ma_klic": True, "model": MODEL, "vystup": txt, "chyba": chyba}
 
 
 def _freelo_kontext(firma):
@@ -71,10 +80,12 @@ def odpoved_na_dotaz(firma, dotaz):
               "Můžeš kombinovat obojí. Pokud odpověď v podkladech není, jasně to napiš. "
               "U klíčových tvrzení z dokumentů odkazuj na zdroj (název souboru).")
     user = f"Klient: {firma.nazev}\n\nDotaz: {dotaz}\n\n" + "\n\n".join(casti)
-    odp = _claude(system, user)
+    odp, chyba = _claude(system, user)
+    if not odp:
+        return {"odpoved": None, "zdroje": [], "chyba": f"AI se nepodařilo zavolat: {chyba or 'neznámá chyba'}"}
     zdroje, videno = [], set()
     for c in chunky:
         if c["nazev"] not in videno:
             videno.add(c["nazev"])
             zdroje.append({"nazev": c["nazev"], "web_url": c["web_url"]})
-    return {"odpoved": odp or "AI se nepodařilo zavolat.", "zdroje": zdroje[:8], "chyba": None}
+    return {"odpoved": odp, "zdroje": zdroje[:8], "chyba": None}
