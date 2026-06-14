@@ -103,6 +103,7 @@ def _inline_migrace():
                 "freelo_tasklist_id": "INTEGER",
                 "onedrive_odkaz": "VARCHAR(800)",
                 "dok_index_bezi": "BOOLEAN DEFAULT FALSE",
+                "dok_index_progress": "VARCHAR(60)",
             },
             "kontakt": {
                 "rucne_upraveno": "BOOLEAN DEFAULT FALSE",

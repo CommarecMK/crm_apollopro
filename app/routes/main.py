@@ -711,15 +711,22 @@ def operativa_klient(id):
     idx_pocet, idx_updated = dokumenty_service.stav(firma.id)
     nalezeno = dokumenty_service.hledej(request.args.get("hledat_dok", ""), firma.id) \
         if request.args.get("hledat_dok") else None
-    dotaz_ai = request.args.get("zeptej", "").strip()
-    ai_odpoved = ai_service.odpoved_na_dotaz(firma, dotaz_ai) if dotaz_ai else None
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
                            projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano(),
                            onedrive_ok=onedrive_service.je_nakonfigurovano(), dok=dok,
                            podslozka=request.args.get("slozka"),
                            idx_pocet=idx_pocet, idx_updated=idx_updated,
                            hledat_dok=request.args.get("hledat_dok", ""), nalezeno=nalezeno,
-                           dotaz_ai=dotaz_ai, ai_odpoved=ai_odpoved, ai_ok=ai_service.ma_ai())
+                           ai_ok=ai_service.ma_ai())
+
+
+@bp.route("/operativa/<int:id>/chat", methods=["POST"])
+@login_required
+def operativa_chat(id):
+    firma = Firma.query.get_or_404(id)
+    dotaz = (request.get_json(silent=True) or {}).get("dotaz", "")
+    vysledek = ai_service.odpoved_na_dotaz(firma, dotaz)
+    return jsonify(vysledek)
 
 
 @bp.route("/operativa/<int:id>/index-dokumenty", methods=["POST"])
@@ -736,7 +743,18 @@ def operativa_index_dokumenty(id):
     app_obj = current_app._get_current_object()
     threading.Thread(target=dokumenty_service.index_klienta_async,
                      args=(app_obj, firma.id), daemon=True).start()
-    flash("Indexace spuštěna na pozadí. Počet načtených dokumentů poroste — průběžně obnovuj stránku.", "info")
+    flash("Indexace spuštěna na pozadí. Počet načtených dokumentů poroste — stránka se sama obnovuje.", "info")
+    return redirect(url_for("main.operativa_klient", id=id))
+
+
+@bp.route("/operativa/<int:id>/index-reset", methods=["POST"])
+@login_required
+def operativa_index_reset(id):
+    firma = Firma.query.get_or_404(id)
+    firma.dok_index_bezi = False
+    firma.dok_index_progress = None
+    db.session.commit()
+    flash("Stav indexace resetován. Můžeš spustit znovu.", "info")
     return redirect(url_for("main.operativa_klient", id=id))
 
 

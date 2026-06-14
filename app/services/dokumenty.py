@@ -24,28 +24,26 @@ def index_klienta(firma):
     drive_id, soubory = data["drive_id"], data["soubory"]
     ted = datetime.now(timezone.utc).isoformat(timespec="seconds")
     existujici = {d.item_id: d for d in KlientDokument.query.filter_by(firma_id=firma.id).all()}
-    videno, indexovano = set(), 0
-    for s in soubory:
-        videno.add(s["id"])
-        if not extrakce.lze_extrahovat(s["nazev"]) or (s["velikost"] or 0) > MAX_BAJTU:
-            continue
+    videno = {s["id"] for s in soubory}
+    # jen soubory, které umíme přečíst a nejsou obří
+    kandidati = [s for s in soubory if extrakce.lze_extrahovat(s["nazev"]) and (s["velikost"] or 0) <= MAX_BAJTU]
+    celkem_k = len(kandidati)
+    indexovano = 0
+    for s in kandidati:
         obsah = onedrive.stahni(drive_id, s["id"])
-        if not obsah:
-            continue
-        text = extrakce.extrahuj_text(obsah, s["nazev"]) or ""
-        d = existujici.get(s["id"]) or KlientDokument(firma_id=firma.id, item_id=s["id"])
-        d.drive_id = drive_id
-        d.nazev = s["nazev"]
-        d.cesta = s["cesta"]
-        d.web_url = s["web_url"]
-        d.velikost = s["velikost"] or 0
-        d.text = text
-        d.updated = ted
-        db.session.add(d)
-        db.session.flush()  # potřebujeme d.id pro chunky
-        embeddings.reindex_dokument(d)
-        indexovano += 1
-        if indexovano % 5 == 0:   # průběžné ukládání (vidět postup, neztratit při pádu)
+        if obsah:
+            text = extrakce.extrahuj_text(obsah, s["nazev"]) or ""
+            d = existujici.get(s["id"]) or KlientDokument(firma_id=firma.id, item_id=s["id"])
+            d.drive_id = drive_id
+            d.nazev, d.cesta, d.web_url = s["nazev"], s["cesta"], s["web_url"]
+            d.velikost = s["velikost"] or 0
+            d.text, d.updated = text, ted
+            db.session.add(d)
+            db.session.flush()  # potřebujeme d.id pro chunky
+            embeddings.reindex_dokument(d)
+            indexovano += 1
+        firma.dok_index_progress = f"{indexovano} / {celkem_k}"
+        if indexovano % 3 == 0:   # průběžné ukládání (vidět postup, neztratit při pádu)
             db.session.commit()
     # odstraň záznamy souborů, které už ve složce nejsou
     for item_id, d in existujici.items():
@@ -63,6 +61,7 @@ def index_klienta_async(app, firma_id):
         if not firma:
             return
         firma.dok_index_bezi = True
+        firma.dok_index_progress = "spouštím…"
         db.session.commit()
         try:
             index_klienta(firma)
@@ -73,6 +72,7 @@ def index_klienta_async(app, firma_id):
             firma = Firma.query.get(firma_id)
             if firma:
                 firma.dok_index_bezi = False
+                firma.dok_index_progress = None
                 db.session.commit()
 
 

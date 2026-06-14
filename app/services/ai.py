@@ -23,8 +23,32 @@ def _claude(system, user, max_tokens=1500):
         return None
 
 
+def _freelo_kontext(firma):
+    """Textový souhrn úkolů klienta z Freela (pro AI) + zda jsou nějaké."""
+    from . import freelo
+    if not firma.freelo_tasklist_id:
+        return ""
+    try:
+        data = freelo.ukoly_klienta(firma.freelo_tasklist_id)
+    except Exception:
+        return ""
+    radky = []
+    for u in data.get("aktivni", []):
+        cast = [f"- {u['nazev']}", f"řešitel: {u['resitel'] or '—'}"]
+        if u.get("termin"):
+            cast.append(f"termín: {u['termin']}")
+        if u.get("dni_od_iterace") is not None:
+            cast.append(f"poslední reakce před {u['dni_od_iterace']} dny")
+        radky.append(", ".join(cast))
+    if not radky and not data.get("hotove"):
+        return ""
+    hotovo = len(data.get("hotove", []))
+    return (f"OTEVŘENÉ ÚKOLY VE FREELU ({len(radky)}), hotových {hotovo}:\n" + "\n".join(radky)) if radky \
+        else f"Žádné otevřené úkoly ve Freelu (hotových {hotovo})."
+
+
 def odpoved_na_dotaz(firma, dotaz):
-    """Vrátí {odpoved, zdroje:[{nazev,web_url}], chyba}."""
+    """Vrátí {odpoved, zdroje:[{nazev,web_url}], chyba}. Kontext = dokumenty (RAG) + Freelo úkoly."""
     from . import embeddings
     dotaz = (dotaz or "").strip()
     if not dotaz:
@@ -32,15 +56,21 @@ def odpoved_na_dotaz(firma, dotaz):
     if not ma_ai():
         return {"odpoved": None, "zdroje": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY (doplň na Railway)."}
     chunky = embeddings.hledat_relevantni(firma.id, dotaz, top_k=12)
-    if not chunky:
-        return {"odpoved": "V dokumentech klienta jsem nenašel nic relevantního. Jsou dokumenty načtené do databáze?",
+    freelo_ctx = _freelo_kontext(firma)
+    if not chunky and not freelo_ctx:
+        return {"odpoved": "Nemám k tomuto klientovi žádná data — načti dokumenty do databáze a/nebo napoj Freelo.",
                 "zdroje": [], "chyba": None}
-    kontext = "\n\n".join(f"[Zdroj {i + 1}: {c['nazev']}]\n{c['text']}" for i, c in enumerate(chunky))
+    casti = []
+    if freelo_ctx:
+        casti.append("=== ÚKOLY (FREELO) ===\n" + freelo_ctx)
+    if chunky:
+        casti.append("=== DOKUMENTY ===\n" + "\n\n".join(
+            f"[Zdroj {i + 1}: {c['nazev']}]\n{c['text']}" for i, c in enumerate(chunky)))
     system = ("Jsi asistent poradenské firmy Commarec. Odpovídej česky, věcně a stručně. "
-              "Vycházej VÝHRADNĚ z poskytnutých úryvků z dokumentů klienta. "
-              "Pokud odpověď v podkladech není, jasně to napiš. "
-              "U klíčových tvrzení odkazuj na zdroj formou (zdroj: název souboru).")
-    user = f"Klient: {firma.nazev}\n\nDotaz: {dotaz}\n\nÚryvky z dokumentů klienta:\n{kontext}"
+              "Vycházej VÝHRADNĚ z poskytnutých podkladů (úkoly z Freela + úryvky z dokumentů klienta). "
+              "Můžeš kombinovat obojí. Pokud odpověď v podkladech není, jasně to napiš. "
+              "U klíčových tvrzení z dokumentů odkazuj na zdroj (název souboru).")
+    user = f"Klient: {firma.nazev}\n\nDotaz: {dotaz}\n\n" + "\n\n".join(casti)
     odp = _claude(system, user)
     zdroje, videno = [], set()
     for c in chunky:

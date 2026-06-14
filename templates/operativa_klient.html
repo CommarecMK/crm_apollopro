@@ -1,7 +1,54 @@
 {% extends "base.html" %}
 {% block content %}
 <p style="margin-bottom:6px"><a href="{{ url_for('main.operativa') }}">← Operativa</a></p>
-<h1 style="color:var(--navy);font-size:28px;margin:0 0 18px">{{ firma.nazev }}</h1>
+<h1 style="color:var(--navy);font-size:28px;margin:0 0 14px">{{ firma.nazev }}</h1>
+
+<!-- AI asistent (chat nad dokumenty + Freelo) -->
+<style>
+  .chat{background:var(--navy-dark);border-radius:12px;padding:14px 16px;margin-bottom:22px;color:#dde5f0}
+  .chat .hd{display:flex;align-items:center;gap:8px;color:var(--cyan);font-weight:700;font-size:13px;
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .chat .okno{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+  .chat .q{align-self:flex-end;background:var(--cyan);color:#fff;padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:85%;font-size:14px}
+  .chat .a{align-self:flex-start;background:#1c3357;color:#eaf1fb;padding:10px 13px;border-radius:12px 12px 12px 2px;max-width:92%;font-size:14px;line-height:1.55;white-space:pre-wrap}
+  .chat .a .zdroje{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .chat .a .zdroje a{background:#0e213e;color:var(--cyan);padding:2px 9px;border-radius:20px;font-size:11px;text-decoration:none}
+  .chat .vstup{display:flex;gap:8px}
+  .chat input{flex:1;padding:10px 12px;border:none;border-radius:8px;font-family:inherit;font-size:14px}
+  .chat .hint{color:#8aa0c0;font-size:12px;margin-top:6px}
+</style>
+<div class="chat">
+  <div class="hd">✦ Zeptej se na klienta {{ firma.nazev }}</div>
+  <div class="okno" id="chatOkno">
+    <div class="a">Ptej se na cokoli z dokumentů i z úkolů ve Freelu — např. „co teď řešíme?", „co je po termínu?", „jaký je finální layout skladu?". Odpovím a doložím zdroje.</div>
+  </div>
+  <form class="vstup" id="chatForm">
+    <input type="text" id="chatVstup" placeholder="Napiš dotaz…" autocomplete="off"{{ ' disabled' if not ai_ok }}>
+    <button class="btn" type="submit"{{ ' disabled' if not ai_ok }}>Odeslat</button>
+  </form>
+  {% if not ai_ok %}<div class="hint">AI zatím není aktivní — doplň firemní ANTHROPIC_API_KEY na Railway.</div>{% endif %}
+</div>
+<script>
+(function(){
+  const form=document.getElementById('chatForm'), vst=document.getElementById('chatVstup'), okno=document.getElementById('chatOkno');
+  if(!form) return;
+  const URL="{{ url_for('main.operativa_chat', id=firma.id) }}", CSRF="{{ csrf_token() }}";
+  function bublina(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;okno.appendChild(d);okno.scrollTop=okno.scrollHeight;return d;}
+  function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+  form.addEventListener('submit',async e=>{
+    e.preventDefault(); const q=vst.value.trim(); if(!q) return;
+    bublina('q',esc(q)); vst.value=''; const a=bublina('a','…');
+    try{
+      const r=await fetch(URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({dotaz:q})});
+      const j=await r.json();
+      let html=esc(j.odpoved||j.chyba||'Bez odpovědi.');
+      if(j.zdroje&&j.zdroje.length){html+='<div class="zdroje">'+j.zdroje.map(z=>'<a href="'+(z.web_url||'#')+'" target="_blank">📄 '+esc(z.nazev)+'</a>').join('')+'</div>';}
+      a.innerHTML=html;
+    }catch(err){a.textContent='Chyba spojení.';}
+    okno.scrollTop=okno.scrollHeight;
+  });
+})();
+</script>
 
 <!-- Freelo úkoly -->
 <h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Freelo úkoly</h2>
@@ -117,32 +164,6 @@ function naplnTl(){
     <p class="muted" style="font-size:13px;margin-top:8px">Nic nenalezeno (možná je potřeba načíst dokumenty).</p>
     {% endif %}
   {% endif %}
-
-  <!-- AI: zeptej se na dokumenty klienta -->
-  <div style="margin-top:14px;border-top:1px solid var(--n8);padding-top:12px">
-    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap">
-      <input type="text" name="zeptej" value="{{ dotaz_ai }}" placeholder="Zeptej se na klienta (AI): např. „jaký je finální layout skladu?“"
-             style="flex:1;min-width:300px;padding:9px 11px;border:1px solid var(--cyan);border-radius:8px;font-family:inherit;font-size:14px">
-      <button class="btn" type="submit">Zeptat se AI</button>
-    </form>
-    {% if not ai_ok %}<p class="muted" style="font-size:12px;margin-top:6px">AI zatím není aktivní — doplň firemní ANTHROPIC_API_KEY na Railway.</p>{% endif %}
-    {% if ai_odpoved %}
-      {% if ai_odpoved.chyba %}
-      <div class="note" style="border-left-color:var(--orange);margin-top:10px">{{ ai_odpoved.chyba }}</div>
-      {% else %}
-      <div style="margin-top:10px;background:var(--n9);border-radius:8px;padding:12px 14px">
-        <div style="font-size:14px;line-height:1.6;white-space:pre-wrap">{{ ai_odpoved.odpoved }}</div>
-        {% if ai_odpoved.zdroje %}
-        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
-          {% for z in ai_odpoved.zdroje %}
-          <a href="{{ z.web_url }}" target="_blank" class="tag" style="text-decoration:none">📄 {{ z.nazev }}</a>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </div>
-      {% endif %}
-    {% endif %}
-  </div>
 </div>
 
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
@@ -151,7 +172,11 @@ function naplnTl(){
   </span>
   <div style="display:flex;align-items:center;gap:14px">
     {% if firma.dok_index_bezi %}
-    <span class="btn btn-ghost" style="cursor:default">⏳ Indexace probíhá… (obnov stránku)</span>
+    <span class="btn btn-ghost" style="cursor:default">⏳ Indexace probíhá… {{ firma.dok_index_progress or '' }}</span>
+    <form method="post" action="{{ url_for('main.operativa_index_reset', id=firma.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">resetovat</button>
+    </form>
     {% else %}
     <form method="post" action="{{ url_for('main.operativa_index_dokumenty', id=firma.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -189,11 +214,15 @@ function naplnTl(){
 
 <!-- Připravované sekce operativy -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px">
-  {% for nazev, popis in [('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy'),('Chat nad klientem','Zeptej se na klienta')] %}
+  {% for nazev, popis in [('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy')] %}
   <div class="stat" style="opacity:.7">
     <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
     <p class="muted" style="font-size:12px">{{ popis }} — <b>Připravujeme</b></p>
   </div>
   {% endfor %}
 </div>
+
+{% if firma.dok_index_bezi %}
+<script>setTimeout(()=>location.reload(), 6000);</script>
+{% endif %}
 {% endblock %}
