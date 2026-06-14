@@ -683,8 +683,9 @@ def ukol_detail(task_id):
         return redirect(url_for("main.operativa"))
     firma = Firma.query.filter_by(freelo_tasklist_id=detail.get("tasklist_id")).first()
     reseni = freelo_service.workers(detail.get("project_id"))
+    podukoly = freelo_service.subtasks(task_id)
     return render_template("ukol_detail.html", u=detail, firma=firma, reseni=reseni,
-                           komentare=detail.get("komentare", []))
+                           komentare=detail.get("komentare", []), podukoly=podukoly)
 
 
 @bp.route("/operativa/ukol/<int:task_id>/prirad", methods=["POST"])

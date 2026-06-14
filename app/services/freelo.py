@@ -128,6 +128,13 @@ def _datum(v):
     return (v or "")[:10] if isinstance(v, str) else ""
 
 
+def _je_oddelovac(t):
+    """Freelo vrací v seznamu i skupinové oddělovače podúkolů ('Podúkoly úkolu: …').
+    Ty do hlavního seznamu nepatří — podúkoly se ukazují v detailu nadřazeného úkolu."""
+    nazev = str(t.get("name") or "")
+    return nazev.startswith("Podúkoly úkolu") or t.get("type") in ("subtasks_separator", "separator")
+
+
 def _uorm(t, hotovo):
     posledni = _datum(t.get("date_edited_at") or t.get("date_edited"))
     return {"id": t.get("id"), "nazev": t.get("name", ""), "hotovo": hotovo,
@@ -225,6 +232,31 @@ def workers(project_id):
         return []
 
 
+def subtasks(task_id):
+    """Podúkoly úkolu (GET /task/{id}/subtasks) → [{id,nazev,hotovo,termin,resitel}]."""
+    if not je_nakonfigurovano() or not task_id:
+        return []
+    try:
+        r = _get(f"/task/{task_id}/subtasks")
+        if r.status_code != 200:
+            return []
+        out = []
+        for s in _vytahni_seznam(r.json(), ("subtasks", "tasks", "taskchecks", "data")):
+            if not isinstance(s, dict):
+                continue
+            stav = s.get("state")
+            hotovo = bool(s.get("finished") or s.get("is_finished")
+                          or (isinstance(stav, dict) and stav.get("state") in ("finished", "done"))
+                          or stav in ("finished", "done", 2))
+            out.append({"id": s.get("id"), "nazev": s.get("name", ""), "hotovo": hotovo,
+                        "termin": _datum(s.get("due_date")),
+                        "resitel": _text(s.get("worker")) or _text(s.get("assignee"))})
+        return out
+    except Exception as e:
+        print(f"[freelo] subtasks: {e}")
+        return []
+
+
 def priradit(task_id, worker_id):
     try:
         r = requests.post(f"{BASE}/task/{task_id}", auth=(FREELO_EMAIL, FREELO_API_KEY),
@@ -265,11 +297,11 @@ def ukoly_klienta(tasklist_id):
         r = _get(f"/tasklist/{tasklist_id}")
         if r.status_code == 200:
             tasks = _vytahni_seznam(r.json(), ("tasks", "data"))
-            aktivni = [_uorm(t, False) for t in tasks if isinstance(t, dict)]
+            aktivni = [_uorm(t, False) for t in tasks if isinstance(t, dict) and not _je_oddelovac(t)]
         rf = _get(f"/tasklist/{tasklist_id}/finished-tasks")
         if rf.status_code == 200:
             ft = _vytahni_seznam(rf.json(), ("finished_tasks", "tasks", "data"))
-            hotove = [_uorm(t, True) for t in ft if isinstance(t, dict)]
+            hotove = [_uorm(t, True) for t in ft if isinstance(t, dict) and not _je_oddelovac(t)]
         return _cache_set(ck, {"aktivni": aktivni, "hotove": hotove, "open_count": len(aktivni)})
     except Exception as e:
         print(f"[freelo] ukoly: {e}")
@@ -290,8 +322,10 @@ def souhrn_tasklistu(tasklist_id):
         # poslední reakce = nejnovější datum iterace napříč úkoly
         if u["posledni"] and (z["posledni_reakce"] is None or u["posledni"] > z["posledni_reakce"]):
             z["posledni_reakce"] = u["posledni"]
-        # bez reakce = žádný komentář (jen zadání)
-        if not u.get("komentaru"):
+        # bez reakce = od zadání se nic nestalo (žádná iterace/úprava)
+        if u.get("komentaru"):
+            pass  # má komentáře → reagováno
+        elif not u["posledni"] or (u["zadan"] and u["posledni"] <= u["zadan"]):
             z["bez_reakce"] += 1
         # po termínu
         if u["termin"]:

@@ -70,6 +70,20 @@
       <p class="muted" style="font-size:13px">Seznam řešitelů se nepodařilo načíst.</p>
       {% endif %}
     </div>
+
+    {% if podukoly %}
+    <div class="stat" style="margin-top:16px">
+      <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Podúkoly ({{ podukoly|length }})</h3>
+      {% for p in podukoly %}
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--n8)">
+        <span class="dot {{ 'zelena' if p.hotovo else 'oranzova' }}"></span>
+        {% if p.id %}<a href="{{ url_for('main.ukol_detail', task_id=p.id) }}" style="font-size:14px;{{ 'text-decoration:line-through;color:#99a' if p.hotovo }}">{{ p.nazev }}</a>
+        {% else %}<span style="font-size:14px;{{ 'text-decoration:line-through;color:#99a' if p.hotovo }}">{{ p.nazev }}</span>{% endif %}
+        {% if p.termin %}<span class="muted" style="font-size:11px;margin-left:auto">{{ p.termin }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
