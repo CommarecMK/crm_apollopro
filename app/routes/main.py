@@ -740,6 +740,22 @@ def ukol_prirad(task_id):
     return redirect(url_for("main.ukol_detail", task_id=task_id))
 
 
+@bp.route("/operativa/ukol/<int:task_id>/dokoncit", methods=["POST"])
+@login_required
+def ukol_dokoncit(task_id):
+    ok = freelo_service.dokoncit(task_id)
+    flash("Úkol označen jako hotový." if ok else "Úkol se nepovedlo uzavřít.", "info" if ok else "error")
+    return redirect(url_for("main.ukol_detail", task_id=task_id))
+
+
+@bp.route("/operativa/ukol/<int:task_id>/otevrit", methods=["POST"])
+@login_required
+def ukol_otevrit(task_id):
+    ok = freelo_service.znovu_otevrit(task_id)
+    flash("Úkol znovu otevřen." if ok else "Úkol se nepovedlo otevřít.", "info" if ok else "error")
+    return redirect(url_for("main.ukol_detail", task_id=task_id))
+
+
 @bp.route("/operativa/ukol/<int:task_id>/komentar", methods=["POST"])
 @login_required
 def ukol_komentar(task_id):

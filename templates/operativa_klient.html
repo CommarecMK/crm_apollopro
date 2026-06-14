@@ -52,7 +52,10 @@ function naplnTl(){
   <tbody>
     {% for u in ukoly.aktivni %}
     <tr><td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a>
-        {% if u.dni_od_iterace is not none %}<div class="muted" style="font-size:11px">poslední reakce před {{ u.dni_od_iterace }} dny</div>{% endif %}</td>
+        <div class="muted" style="font-size:11px">
+          {% if u.dni_od_iterace is not none %}poslední reakce před {{ u.dni_od_iterace }} dny{% endif %}
+          {% if u.podukolu %}{% if u.dni_od_iterace is not none %} · {% endif %}{{ u.podukolu }} podúkolů{% endif %}
+        </div></td>
       <td>{{ u.resitel or '—' }}</td>
       <td style="color:{{ 'var(--red)' if u.termin else 'inherit' }}">{{ u.termin or '—' }}</td>
       <td style="text-align:center"><span class="dot oranzova"></span>otevřený</td></tr>

@@ -153,9 +153,20 @@ def _je_oddelovac(t):
     return nazev.startswith("Podúkoly úkolu") or t.get("type") in ("subtasks_separator", "separator")
 
 
+def _pocet_podukolu(t):
+    for kand in (t.get("count_subtasks"), t.get("subtasks_count"),
+                 t.get("count_taskchecks"), t.get("taskchecks_count")):
+        if isinstance(kand, int) and kand:
+            return kand
+    if isinstance(t.get("subtasks"), list):
+        return len(t.get("subtasks"))
+    return 0
+
+
 def _uorm(t, hotovo):
     posledni = _datum(t.get("date_edited_at") or t.get("date_edited"))
     return {"id": t.get("id"), "nazev": t.get("name", ""), "hotovo": hotovo,
+            "podukolu": _pocet_podukolu(t),
             "freelo_url": f"https://app.freelo.io/task/{t.get('id')}",
             "termin": _datum(t.get("due_date")),
             "zadan": _datum(t.get("date_add")),
@@ -222,6 +233,8 @@ def ukol_detail(task_id):
             "popis": popis["text"],
             "popis_prilohy": popis["prilohy"],
             "stav": (t.get("state") or {}).get("state") if isinstance(t.get("state"), dict) else (t.get("state") or ""),
+            "hotovo": (str((t.get("state") or {}).get("state") if isinstance(t.get("state"), dict) else t.get("state")).lower()
+                       in ("finished", "done", "2")),
             "zadan": _datum(t.get("date_add")),
             "termin": _datum(t.get("due_date")),
             "posledni": posledni,
@@ -288,6 +301,29 @@ def priradit(task_id, worker_id):
     except Exception as e:
         print(f"[freelo] priradit: {e}")
         return False
+
+
+def _post_akce(path):
+    try:
+        r = requests.post(f"{BASE}{path}", auth=(FREELO_EMAIL, FREELO_API_KEY),
+                          headers=_hlavicky(), timeout=TIMEOUT)
+        if r.status_code in (200, 201):
+            _CACHE.clear()
+            return True
+        return False
+    except Exception as e:
+        print(f"[freelo] akce {path}: {e}")
+        return False
+
+
+def dokoncit(task_id):
+    """Označit úkol jako hotový (POST /task/{id}/finish)."""
+    return _post_akce(f"/task/{task_id}/finish")
+
+
+def znovu_otevrit(task_id):
+    """Znovu otevřít hotový úkol (POST /task/{id}/activate)."""
+    return _post_akce(f"/task/{task_id}/activate")
 
 
 def pridej_komentar(task_id, text):

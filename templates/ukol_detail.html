@@ -7,8 +7,23 @@
   {% else %}<a href="{{ url_for('main.operativa') }}">← Operativa</a>{% endif %}
 </p>
 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-  <h1 style="color:var(--navy);font-size:26px;margin:0">{{ u.nazev }}</h1>
-  <a class="logout" href="{{ u.freelo_url }}" target="_blank" style="color:#778">otevřít ve Freelo ↗</a>
+  <h1 style="color:var(--navy);font-size:26px;margin:0">
+    {% if u.hotovo %}<span class="dot zelena"></span>{% endif %}{{ u.nazev }}
+  </h1>
+  <div style="display:flex;align-items:center;gap:14px">
+    {% if u.hotovo %}
+    <form method="post" action="{{ url_for('main.ukol_otevrit', task_id=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-ghost" type="submit">↻ Znovu otevřít</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('main.ukol_dokoncit', task_id=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit" style="background:var(--green)">✓ Označit jako hotové</button>
+    </form>
+    {% endif %}
+    <a class="logout" href="{{ u.freelo_url }}" target="_blank" style="color:#778">otevřít ve Freelo ↗</a>
+  </div>
 </div>
 
 <div class="stats">
