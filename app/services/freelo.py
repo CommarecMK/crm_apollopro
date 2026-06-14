@@ -383,6 +383,29 @@ def vytvor_ukol(tasklist_id, nazev, popis="", worker_id=None, termin=None, auth=
         return False, str(e)
 
 
+def vytvor_podukol(task_id, nazev, popis="", worker_id=None, termin=None, auth=None):
+    """Vytvoří podúkol pod daným úkolem (POST /task/{id}/subtasks). Vrací (ok, info)."""
+    telo = {"name": nazev}
+    if popis:
+        telo["comment"] = {"content": popis}
+    if worker_id:
+        try:
+            telo["worker"] = int(worker_id)
+        except (ValueError, TypeError):
+            pass
+    if termin:
+        telo["due_date"] = f"{termin[:10]}T09:00:00"
+    try:
+        r = requests.post(f"{BASE}/task/{task_id}/subtasks", auth=_auth(auth),
+                          headers=_hlavicky(), json=telo, timeout=TIMEOUT)
+        if r.status_code in (200, 201):
+            _CACHE.clear()
+            return True, "ok"
+        return False, f"{r.status_code}: {(r.text or '')[:150]}"
+    except Exception as e:
+        return False, str(e)
+
+
 def _id_ukolu_z_komentare(c):
     """Z komentáře (z /all-comments) vytáhne ID úkolu, ať je reference kdekoli."""
     for kandidat in (c.get("task_id"),

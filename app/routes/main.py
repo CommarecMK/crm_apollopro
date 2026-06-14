@@ -761,6 +761,16 @@ def operativa_navrh_ukolu(id):
         vytazeno = (extrakce_service.extrahuj_text(data, soubor.filename) or "").strip()
         text = vytazeno or text
     vysledek = ai_service.navrhni_ukoly(firma, text)
+    # namapuj "podobny" název na existující úkol (id) → modal nabídne komentář/podúkol
+    if vysledek.get("ukoly") and firma.freelo_tasklist_id:
+        data = freelo_service.ukoly_klienta(firma.freelo_tasklist_id)
+        existujici = {u["nazev"].lower(): u["id"] for u in data.get("aktivni", []) + data.get("hotove", []) if u.get("nazev")}
+        for u in vysledek["ukoly"]:
+            pid_match = None
+            pod = (u.get("podobny") or "").lower().strip()
+            if pod:
+                pid_match = existujici.get(pod) or next((i for n, i in existujici.items() if pod in n or n in pod), None)
+            u["podobny_id"] = pid_match
     reseni = []
     pid = freelo_service.project_id_pro_tasklist(firma.freelo_tasklist_id)
     if pid:
@@ -778,15 +788,24 @@ def operativa_vytvor_ukoly(id):
     auth = _moje_freelo()
     vytvoreno, chyby = 0, []
     for u in data.get("ukoly", []):
-        if not u.get("nazev"):
+        nazev = u.get("nazev", "")
+        if not nazev:
             continue
-        ok, info = freelo_service.vytvor_ukol(firma.freelo_tasklist_id, u.get("nazev", ""),
-                                              u.get("popis", ""), u.get("worker_id"),
-                                              u.get("termin"), auth=auth)
+        akce = u.get("akce", "novy")
+        cil = u.get("podobny_id")
+        if akce == "komentar" and cil:
+            ok = freelo_service.pridej_komentar(cil, f"{nazev}\n{u.get('popis', '')}", auth=auth)
+            info = "ok" if ok else "komentář selhal"
+        elif akce == "podukol" and cil:
+            ok, info = freelo_service.vytvor_podukol(cil, nazev, u.get("popis", ""),
+                                                     u.get("worker_id"), u.get("termin"), auth=auth)
+        else:
+            ok, info = freelo_service.vytvor_ukol(firma.freelo_tasklist_id, nazev, u.get("popis", ""),
+                                                  u.get("worker_id"), u.get("termin"), auth=auth)
         if ok:
             vytvoreno += 1
         else:
-            chyby.append(f"{u.get('nazev', '?')}: {info}")
+            chyby.append(f"{nazev}: {info}")
     return jsonify({"vytvoreno": vytvoreno, "chyby": chyby})
 
 
@@ -848,8 +867,8 @@ def operativa_navrh_slozku(id):
     firma = Firma.query.get_or_404(id)
     filename = (request.get_json(silent=True) or {}).get("soubor", "")
     slozky = onedrive_service.slozky(firma.onedrive_odkaz) if firma.onedrive_odkaz else []
-    navrh = ai_service.navrhni_slozku(filename, [s["cesta"] for s in slozky])
-    return jsonify({"navrh": navrh})
+    vysledek = ai_service.navrhni_slozku(filename, [s["cesta"] for s in slozky])
+    return jsonify({"navrh": vysledek.get("cesta", ""), "duvod": vysledek.get("duvod", "")})
 
 
 @bp.route("/operativa/<int:id>/index-reset", methods=["POST"])

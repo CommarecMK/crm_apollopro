@@ -183,5 +183,17 @@
     <span style="color:#8a9ab2">Commarec</span>
   </footer>
   {% endif %}
+  <script>
+  /* Globální loading: po odeslání běžného formuláře znedostupní tlačítko a ukáže spinner.
+     Formuláře řešené přes JS (AJAX) mají data-noload a přeskočí se. */
+  document.addEventListener('submit', function(e){
+    var f=e.target; if(!f || f.dataset.noload!==undefined) return;
+    var b=f.querySelector('button[type=submit]') || f.querySelector('button:not([type])');
+    if(b && !b.disabled){
+      var puv=b.innerHTML;
+      setTimeout(function(){ b.style.minWidth=b.offsetWidth+'px'; b.disabled=true; b.dataset.puv=puv; b.innerHTML='⏳ …'; }, 0);
+    }
+  }, true);
+  </script>
 </body>
 </html>

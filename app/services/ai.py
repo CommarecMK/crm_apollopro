@@ -77,21 +77,29 @@ def navrhni_ukoly(firma, text):
         return {"ukoly": [], "chyba": "Z dokumentu se nepodařilo přečíst text (možná naskenované PDF/obrázek nebo prázdný soubor). Zkus vložit text ručně."}
     if not ma_ai():
         return {"ukoly": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
-    # kontext klienta (otevřené úkoly) — ať nenavrhuje duplicity a je v obraze
-    freelo_ctx = _freelo_kontext(firma)
+    # existující úkoly (pro kontrolu duplicit)
+    existujici = []
+    try:
+        from . import freelo
+        if firma.freelo_tasklist_id:
+            d = freelo.ukoly_klienta(firma.freelo_tasklist_id)
+            existujici = [u["nazev"] for u in d.get("aktivni", []) + d.get("hotove", []) if u.get("nazev")]
+    except Exception:
+        pass
     system = ("Jsi zkušený projektový konzultant logistiky ve firmě Commarec. Z dodaného dokumentu "
-              "(zápis z jednání, analýza dat, report, nabídka) navrhni KONKRÉTNÍ úkoly a doporučené další kroky "
-              "pro klienta. Buď chytrý a proaktivní: i z analytického/datového dokumentu odvoď smysluplné akce "
-              "(např. ověřit kapacitu regálů dle dat, připravit návrh layoutu, doplnit chybějící podklad). "
-              "Nevymýšlej si fakta. Vyhni se úkolům, které už jsou mezi otevřenými. "
-              "Vrať POUZE JSON pole objektů ve tvaru "
-              '[{"nazev":"krátký název","popis":"1–2 věty co a proč udělat","termin":"YYYY-MM-DD nebo null"}]. '
-              "Žádný jiný text. Max 15 úkolů, jen reálné akce. Pokud opravdu nic akčního není, vrať [].")
+              "(zápis z jednání, analýza dat, report, nabídka) navrhni KONKRÉTNÍ úkoly a doporučené další kroky. "
+              "Buď chytrý a proaktivní: i z analytického/datového dokumentu odvoď smysluplné akce. Nevymýšlej si fakta. "
+              "U KAŽDÉHO úkolu zkontroluj, zda už NEEXISTUJE podobný v seznamu existujících úkolů. "
+              "Vrať POUZE JSON pole objektů: "
+              '[{"nazev":"krátký název","popis":"1–2 věty co a proč","termin":"YYYY-MM-DD nebo null",'
+              '"podobny":"přesný název existujícího podobného úkolu nebo prázdné","duvod":"krátké zdůvodnění '
+              "(u podobného proč je podobný, jinak proč úkol dává smysl)\"}]. "
+              "Žádný jiný text. Max 15. Pokud nic akčního není, vrať [].")
     user = f"Klient: {firma.nazev}\n\n"
-    if freelo_ctx:
-        user += f"Už otevřené úkoly (nenavrhuj duplicity):\n{freelo_ctx[:2000]}\n\n"
+    if existujici:
+        user += "Existující úkoly:\n- " + "\n- ".join(existujici[:60]) + "\n\n"
     user += f"Dokument:\n{text[:14000]}"
-    odp, chyba = _claude(system, user, max_tokens=2500)
+    odp, chyba = _claude(system, user, max_tokens=3000)
     if not odp:
         return {"ukoly": [], "chyba": f"AI chyba: {chyba}"}
     data = _parse_json(odp)
@@ -102,22 +110,25 @@ def navrhni_ukoly(firma, text):
         if isinstance(u, dict) and u.get("nazev"):
             ukoly.append({"nazev": str(u.get("nazev"))[:200],
                           "popis": str(u.get("popis") or "")[:1000],
-                          "termin": (u.get("termin") or "")[:10] if u.get("termin") else ""})
+                          "termin": (u.get("termin") or "")[:10] if u.get("termin") else "",
+                          "podobny": str(u.get("podobny") or "").strip()[:200],
+                          "duvod": str(u.get("duvod") or "").strip()[:300]})
     return {"ukoly": ukoly, "chyba": None}
 
 
 def navrhni_slozku(filename, cesty):
-    """Navrhne, do které složky (z `cesty`) soubor patří. Vrací cestu (str) nebo ''."""
-    if not filename or not cesty:
-        return ""
-    if not ma_ai():
-        return ""
+    """Navrhne složku pro soubor. Vrací {cesta, duvod}."""
+    if not filename or not cesty or not ma_ai():
+        return {"cesta": "", "duvod": ""}
     seznam = "\n".join(cesty[:80])
-    system = ("Vyber NEJVHODNĚJŠÍ složku pro daný soubor podle jeho názvu. "
-              "Odpověz POUZE přesnou cestou složky ze seznamu, nic jiného. Když si nejsi jistý, vrať '/ (kořen)'.")
-    odp, _ = _claude(system, f"Soubor: {filename}\n\nSložky:\n{seznam}", max_tokens=60)
-    odp = (odp or "").strip().splitlines()[0].strip() if odp else ""
-    return odp if odp in cesty else ""
+    system = ("Vyber NEJVHODNĚJŠÍ složku pro daný soubor podle jeho názvu. Vrať POUZE JSON "
+              '{"cesta":"přesná cesta ze seznamu","duvod":"krátké zdůvodnění proč"}. Když nevíš, cesta = "/ (kořen)".')
+    odp, _ = _claude(system, f"Soubor: {filename}\n\nSložky:\n{seznam}", max_tokens=200)
+    d = _parse_json(odp) if odp else None
+    if isinstance(d, dict):
+        cesta = str(d.get("cesta") or "").strip()
+        return {"cesta": cesta if cesta in cesty else "", "duvod": str(d.get("duvod") or "").strip()[:300]}
+    return {"cesta": "", "duvod": ""}
 
 
 def _freelo_kontext(firma):
