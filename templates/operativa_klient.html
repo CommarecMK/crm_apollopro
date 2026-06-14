@@ -50,8 +50,33 @@
 })();
 </script>
 
-<!-- Freelo úkoly -->
-<h2 style="color:var(--navy);font-size:18px;margin:0 0 10px">Freelo úkoly</h2>
+<!-- Statistiky klienta -->
+{% if souhrn %}
+<div class="stats" style="margin-bottom:18px">
+  <div class="stat"><div class="num">{{ souhrn.open }}</div><div class="lbl">Otevřených úkolů</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if souhrn.po_terminu else 'var(--navy)' }}">{{ souhrn.po_terminu }}</div><div class="lbl">Po termínu</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if souhrn.bez_reakce else 'var(--navy)' }}">{{ souhrn.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
+  <div class="stat"><div class="num" style="color:var(--green)">{{ souhrn.hotovo }}</div><div class="lbl">Hotových</div></div>
+  <div class="stat"><div class="num">{{ idx_pocet }}</div><div class="lbl">Dokumentů v DB</div></div>
+</div>
+{% endif %}
+
+<style>
+  .sek{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08);margin-bottom:14px;overflow:hidden}
+  .sek>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+    gap:10px;padding:14px 18px;font-family:'Druk Condensed Super','Montserrat',sans-serif;font-weight:800;
+    text-transform:uppercase;letter-spacing:.03em;color:var(--navy);font-size:16px}
+  .sek>summary::-webkit-details-marker{display:none}
+  .sek>summary .si{color:#99a;font-weight:600;font-size:12px;text-transform:none;letter-spacing:0}
+  .sek>summary:after{content:"▾";color:var(--cyan-dark);font-size:13px}
+  .sek[open]>summary:after{content:"▴"}
+  .sek .telo{padding:0 18px 16px}
+</style>
+
+<!-- Freelo úkoly (sbaleno) -->
+<details class="sek">
+  <summary>Freelo úkoly <span class="si">{% if souhrn %}{{ souhrn.open }} otevřených · {{ souhrn.hotovo }} hotových{% else %}klik pro detail{% endif %}</span></summary>
+  <div class="telo">
 {% if not freelo_ok %}
 <div class="note">Freelo není nakonfigurované (chybí FREELO_EMAIL / FREELO_API_KEY).</div>
 {% elif not firma.freelo_tasklist_id %}
@@ -117,9 +142,13 @@ function naplnTl(){
   </tbody>
 </table>
 {% endif %}
+  </div>
+</details>
 
-<!-- Dokumenty z OneDrive -->
-<h2 style="color:var(--navy);font-size:18px;margin:28px 0 10px">Dokumenty (OneDrive)</h2>
+<!-- Dokumenty z OneDrive (sbaleno) -->
+<details class="sek">
+  <summary>Dokumenty <span class="si">{{ idx_pocet }} v databázi{% if firma.onedrive_odkaz %} · složka napojena{% endif %}</span></summary>
+  <div class="telo">
 {% if not onedrive_ok %}
 <div class="note">OneDrive zatím není nakonfigurovaný (chybí Microsoft Graph přístup).</div>
 {% elif not firma.onedrive_odkaz %}
@@ -172,7 +201,7 @@ function naplnTl(){
   </span>
   <div style="display:flex;align-items:center;gap:14px">
     {% if firma.dok_index_bezi %}
-    <span class="btn btn-ghost" style="cursor:default">⏳ Indexace probíhá… {{ firma.dok_index_progress or '' }}</span>
+    <span class="btn btn-ghost" style="cursor:default">⏳ Indexace běží — načteno {{ firma.dok_index_progress or '…' }} <span style="font-size:11px">(obnov stránku)</span></span>
     <form method="post" action="{{ url_for('main.operativa_index_reset', id=firma.id) }}" style="display:inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">resetovat</button>
@@ -211,18 +240,6 @@ function naplnTl(){
   </tbody>
 </table>
 {% endif %}
-
-<!-- Připravované sekce operativy -->
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px">
-  {% for nazev, popis in [('Zápisy','Poznámky z jednání'),('LOE','Nabídky a výstupy')] %}
-  <div class="stat" style="opacity:.7">
-    <h3 class="druk" style="font-size:13px;color:var(--navy);margin-bottom:6px">{{ nazev }}</h3>
-    <p class="muted" style="font-size:12px">{{ popis }} — <b>Připravujeme</b></p>
   </div>
-  {% endfor %}
-</div>
-
-{% if firma.dok_index_bezi %}
-<script>setTimeout(()=>location.reload(), 6000);</script>
-{% endif %}
+</details>
 {% endblock %}

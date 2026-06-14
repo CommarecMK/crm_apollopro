@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Freelo — přehled úkolů</h1>
+<p class="muted" style="margin-bottom:18px">Souhrn úkolů napříč všemi napojenými klienty{% if fre_updated %} · data {{ fre_updated[:10] }}{% endif %}.</p>
+
+{% if snapshot_chybi %}
+<div class="note" style="border-left-color:var(--orange)">
+  Data úkolů z Freela nejsou načtená. Otevři <b>⚙ Admin → Obnovit data</b>, pak se zde objeví.
+</div>
+{% elif dash.napojeno %}
+<div class="stats" style="margin-bottom:14px">
+  <div class="stat"><div class="num">{{ dash.open }}</div><div class="lbl">Otevřených úkolů</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if dash.bez_reakce else 'var(--navy)' }}">{{ dash.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if dash.po_terminu else 'var(--navy)' }}">{{ dash.po_terminu }}</div><div class="lbl">Po termínu</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if dash.max_zpozdeni else 'var(--navy)' }}">{{ dash.max_zpozdeni }}</div><div class="lbl">Největší zpoždění (dní)</div></div>
+  <div class="stat"><div class="num">{{ dash.napojeno }}</div><div class="lbl">Napojených klientů</div></div>
+</div>
+
+{% if top_overdue %}
+<div class="stat">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Nejvíce po termínu</h3>
+  <div class="tabulka">
+  <table>
+    <thead><tr><th>Úkol</th><th>Klient</th><th>Řešitel</th><th>Termín</th><th style="text-align:right">Zpoždění</th></tr></thead>
+    <tbody>
+      {% for t in top_overdue %}
+      <tr>
+        <td><a href="{{ url_for('main.ukol_detail', task_id=t.id) }}">{{ t.nazev }}</a></td>
+        <td><a href="{{ url_for('main.operativa_klient', id=t.firma_id) }}">{{ t.firma }}</a></td>
+        <td>{{ t.resitel or '—' }}</td>
+        <td style="color:var(--red)">{{ t.termin }}</td>
+        <td style="text-align:right;color:var(--red);font-weight:700">{{ t.zpozdeni }} dní</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% else %}
+<div class="note">Zatím není napojený žádný klient na Freelo. Otevři klienta v sekci Klienti a napoj jeho tasklist.</div>
+{% endif %}
+{% endblock %}

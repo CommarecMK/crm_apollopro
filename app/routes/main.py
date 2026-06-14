@@ -643,7 +643,27 @@ def operativa():
         q = q.filter(Firma.nazev.ilike(f"%{hledat}%"))
     seznam = q.order_by(Firma.nazev).all()
 
-    # Dashboard + souhrny VÝHRADNĚ ze snapshotu (agregace nikdy nesahá živě → rychlé)
+    # Souhrny pro dlaždice (ze snapshotu) + počet dokumentů v DB na klienta
+    souhrny = {}
+    snap_data, _ = snapshot_freelo.nacti()
+    if snap_data.get("tasklisty"):
+        for f in seznam:
+            if f.freelo_tasklist_id:
+                s = freelo_service.souhrn_tasklistu(f.freelo_tasklist_id, jen_snapshot=True)
+                if s["open"] or s["hotovo"]:
+                    souhrny[f.id] = s
+    from ..models import KlientDokument
+    from sqlalchemy import func
+    db_pocet = dict(db.session.query(KlientDokument.firma_id, func.count(KlientDokument.id))
+                    .group_by(KlientDokument.firma_id).all())
+    return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita,
+                           souhrny=souhrny, db_pocet=db_pocet,
+                           freelo_ok=freelo_service.je_nakonfigurovano())
+
+
+@bp.route("/operativa/freelo")
+@login_required
+def operativa_freelo():
     souhrny, top_overdue = {}, []
     dash = {"open": 0, "bez_reakce": 0, "po_terminu": 0, "max_zpozdeni": 0, "napojeno": 0}
     snap_data, fre_updated = snapshot_freelo.nacti()
@@ -663,9 +683,8 @@ def operativa():
             for ot in s["overdue_tasks"]:
                 top_overdue.append({**ot, "firma": f.nazev, "firma_id": f.id})
         top_overdue.sort(key=lambda x: -x["zpozdeni"])
-        top_overdue = top_overdue[:8]
-    return render_template("operativa.html", firmy=seznam, hledat=hledat, f_aktivita=f_aktivita,
-                           souhrny=souhrny, dash=dash, top_overdue=top_overdue,
+        top_overdue = top_overdue[:12]
+    return render_template("operativa_freelo.html", dash=dash, top_overdue=top_overdue,
                            freelo_ok=freelo_service.je_nakonfigurovano(),
                            snapshot_chybi=snapshot_chybi, fre_updated=fre_updated)
 
@@ -711,13 +730,14 @@ def operativa_klient(id):
     idx_pocet, idx_updated = dokumenty_service.stav(firma.id)
     nalezeno = dokumenty_service.hledej(request.args.get("hledat_dok", ""), firma.id) \
         if request.args.get("hledat_dok") else None
+    souhrn = freelo_service.souhrn_tasklistu(firma.freelo_tasklist_id) if firma.freelo_tasklist_id else None
     return render_template("operativa_klient.html", firma=firma, ukoly=ukoly,
                            projekty=projekty, freelo_ok=freelo_service.je_nakonfigurovano(),
                            onedrive_ok=onedrive_service.je_nakonfigurovano(), dok=dok,
                            podslozka=request.args.get("slozka"),
                            idx_pocet=idx_pocet, idx_updated=idx_updated,
                            hledat_dok=request.args.get("hledat_dok", ""), nalezeno=nalezeno,
-                           ai_ok=ai_service.ma_ai())
+                           ai_ok=ai_service.ma_ai(), souhrn=souhrn)
 
 
 @bp.route("/operativa/<int:id>/chat", methods=["POST"])

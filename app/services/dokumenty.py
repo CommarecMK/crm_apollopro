@@ -42,7 +42,7 @@ def index_klienta(firma):
             db.session.flush()  # potřebujeme d.id pro chunky
             embeddings.reindex_dokument(d)
             indexovano += 1
-        firma.dok_index_progress = f"{indexovano} / {celkem_k}"
+        firma.dok_index_progress = f"{indexovano} ze {celkem_k}"
         if indexovano % 3 == 0:   # průběžné ukládání (vidět postup, neztratit při pádu)
             db.session.commit()
     # odstraň záznamy souborů, které už ve složce nejsou

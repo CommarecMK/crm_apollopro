@@ -32,7 +32,8 @@ with app.app_context():
 CESTY = ["/", "/zakazky", "/firmy", f"/firmy/{fid}", f"/zakazka/{zid}",
          "/interni", "/cashflow", "/pm", "/pm/— bez PM —",
          "/operativa", f"/operativa/{fid}", "/admin", "/admin/uzivatele",
-         "/operativa/ukol/1", "/operativa/resitele", "/muj-ucet", "/operativa/dokumenty"]
+         "/operativa/ukol/1", "/operativa/resitele", "/muj-ucet", "/operativa/dokumenty",
+         "/operativa/freelo"]
 
 chyby = []
 for p in CESTY:
