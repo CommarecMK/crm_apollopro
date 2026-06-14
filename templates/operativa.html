@@ -59,6 +59,7 @@
         <span><b style="color:var(--navy)">{{ s.open }}</b> otevřených</span>
         {% if s.po_terminu %}<span style="color:var(--red)"><b>{{ s.po_terminu }}</b> po termínu</span>{% endif %}
         {% if s.bez_reakce %}<span style="color:var(--orange)"><b>{{ s.bez_reakce }}</b> bez reakce</span>{% endif %}
+        <span style="color:var(--green)"><b>{{ s.hotovo }}</b> hotových</span>
       </div>
       <div class="muted" style="font-size:12px;margin-top:6px">
         {% if s.posledni_reakce %}Poslední reakce: {{ s.posledni_reakce }}{% else %}Zatím bez reakce{% endif %}

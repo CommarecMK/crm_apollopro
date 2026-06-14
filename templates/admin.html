@@ -16,11 +16,15 @@
   </a>
 
   <div class="stat">
-    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Data z Clockify</h3>
-    <p class="muted" style="font-size:13px;margin-bottom:10px">Ruční obnova snapshotu (jinak 1× denně automaticky).</p>
+    <h3 class="druk" style="font-size:15px;color:var(--navy);margin-bottom:6px">Data (Clockify + Freelo)</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:6px">Ruční obnova snapshotů (jinak 1× denně automaticky). Stránky pak čtou z snapshotu = rychlé.</p>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">
+      Clockify: {{ clk_updated or 'zatím neobnoveno' }}<br>
+      Freelo: {{ fre_updated or 'zatím neobnoveno' }}
+    </p>
     <form method="post" action="{{ url_for('main.obnovit') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn" type="submit">Obnovit z Clockify</button>
+      <button class="btn" type="submit">Obnovit data</button>
     </form>
   </div>
 

@@ -123,7 +123,8 @@ def _jen_interni(q):
     return q.filter(Firma.ico == COMPANY_ICO)
 from ..auth import (login_required, klient_required, zakazky_required,
                     admin_required, finance_required)
-from ..services import clockify, firmy as firmy_service, snapshot, freelo as freelo_service
+from ..services import (clockify, firmy as firmy_service, snapshot,
+                        freelo as freelo_service, snapshot_freelo)
 
 bp = Blueprint("main", __name__)
 
@@ -259,9 +260,17 @@ def diagnostika_merk():
 @bp.route("/obnovit", methods=["POST"])
 @zakazky_required
 def obnovit():
-    """Ruční obnova dat z Clockify (snapshot)."""
-    ok, info = snapshot.obnov()
-    flash("Data z Clockify obnovena." if ok else f"Chyba obnovy: {info}", "info" if ok else "error")
+    """Ruční obnova dat z Clockify i Freela (snapshoty)."""
+    ok_c, info_c = snapshot.obnov()
+    ok_f, info_f = snapshot_freelo.obnov()
+    if ok_c and ok_f:
+        flash("Data z Clockify i Freela obnovena.", "info")
+    elif ok_c:
+        flash(f"Clockify obnoveno; Freelo chyba: {info_f}", "error")
+    elif ok_f:
+        flash(f"Freelo obnoveno; Clockify chyba: {info_c}", "error")
+    else:
+        flash(f"Chyba obnovy — Clockify: {info_c}; Freelo: {info_f}", "error")
     return redirect(request.referrer or url_for("main.prehled"))
 
 
@@ -271,8 +280,10 @@ def cron_obnovit():
     from ..extensions import CRON_KEY
     if not CRON_KEY or request.args.get("key") != CRON_KEY:
         return ("Neautorizováno", 403)
-    ok, info = snapshot.obnov()
-    return (f"OK {info}", 200) if ok else (f"CHYBA {info}", 500)
+    ok_c, info_c = snapshot.obnov()
+    ok_f, info_f = snapshot_freelo.obnov()
+    return (f"OK clockify={info_c} freelo={info_f}", 200) if (ok_c and ok_f) \
+        else (f"CHYBA clockify={info_c} freelo={info_f}", 500)
 
 
 def _vyhodnot_riziko(z):
@@ -681,22 +692,6 @@ def operativa_resitel(jmeno):
     return render_template("operativa_resitel.html", osoba=osoba, ukoly=ukoly)
 
 
-@bp.route("/operativa/zavrene")
-@login_required
-def operativa_zavrene():
-    if not freelo_service.je_nakonfigurovano():
-        flash("Freelo není nakonfigurované.", "error")
-        return redirect(url_for("main.operativa"))
-    napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
-    radky = []
-    for f in napojene:
-        for u in freelo_service.ukoly_klienta(f.freelo_tasklist_id)["hotove"]:
-            radky.append({**u, "firma": f.nazev, "firma_id": f.id})
-    # nejnověji dokončené nahoře (dle poslední aktivity)
-    radky.sort(key=lambda x: x.get("posledni") or "", reverse=True)
-    return render_template("operativa_zavrene.html", radky=radky, pocet=len(radky))
-
-
 @bp.route("/operativa/<int:id>")
 @login_required
 def operativa_klient(id):
@@ -1085,8 +1080,11 @@ ROLE_POPIS = {"admin": "Admin (vše + uživatelé)", "editor": "Editor (zakázky
 @bp.route("/admin")
 @admin_required
 def admin_hub():
+    _, clk_updated = snapshot.nacti()
+    _, fre_updated = snapshot_freelo.nacti()
     return render_template("admin.html",
-                           freelo_ok=freelo_service.je_nakonfigurovano())
+                           freelo_ok=freelo_service.je_nakonfigurovano(),
+                           clk_updated=clk_updated, fre_updated=fre_updated)
 
 
 @bp.route("/admin/uzivatele")

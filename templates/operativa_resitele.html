@@ -11,6 +11,7 @@
     <th style="text-align:right">Po termínu</th>
     <th style="text-align:right">Největší zpoždění</th>
     <th style="text-align:right">Bez reakce</th>
+    <th style="text-align:right">Hotových</th>
     <th>Poslední aktivita</th>
   </tr></thead>
   <tbody>
@@ -21,10 +22,11 @@
       <td style="text-align:right;color:{{ 'var(--red)' if r.po_terminu else 'inherit' }}">{{ r.po_terminu or '—' }}</td>
       <td style="text-align:right;color:{{ 'var(--red)' if r.max_zpozdeni else 'inherit' }}">{{ (r.max_zpozdeni ~ ' dní') if r.max_zpozdeni else '—' }}</td>
       <td style="text-align:right;color:{{ 'var(--orange)' if r.bez_reakce else 'inherit' }}">{{ r.bez_reakce or '—' }}</td>
+      <td style="text-align:right;color:var(--green)">{{ r.hotovo or '—' }}</td>
       <td>{{ r.posledni or '—' }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="muted" style="text-align:center;padding:18px">Žádné otevřené úkoly.</td></tr>
+    <tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Žádné otevřené úkoly.</td></tr>
     {% endfor %}
   </tbody>
 </table>

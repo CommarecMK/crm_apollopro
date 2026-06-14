@@ -314,16 +314,17 @@ def _id_ukolu_z_komentare(c):
     return None
 
 
-def reakce_mapa(max_stran=8):
-    """{task_id(str): 'YYYY-MM-DD'} = datum POSLEDNÍHO komentáře u úkolu.
-    Jedním (stránkovaným) dotazem /all-comments místo dotazu na každý úkol. Cache."""
-    ck = "reakce_mapa"
-    c = _cache_get(ck)
-    if c is not None:
-        return c
+def reakce_mapa(max_stran=8, vse=False):
+    """{task_id(str): 'YYYY-MM-DD'} = datum POSLEDNÍHO komentáře u úkolu (z /all-comments).
+    vse=True → projde všechny stránky (pro snapshot, 100% přesné, bez cache)."""
+    if not vse:
+        c = _cache_get("reakce_mapa")
+        if c is not None:
+            return c
+        max_stran = 8
     out = {}
     try:
-        for p in range(max_stran):
+        for p in range(max_stran if not vse else 1000):
             st, d = _json(f"/all-comments?type=task&order_by=date_add&order=desc&p={p}")
             if st != 200 or not d:
                 break
@@ -341,12 +342,15 @@ def reakce_mapa(max_stran=8):
                 break
     except Exception as e:
         print(f"[freelo] reakce_mapa: {e}")
-    return _cache_set(ck, out)
+    if not vse:
+        _cache_set("reakce_mapa", out)
+    return out
 
 
-def _dopln_reakce(ukoly):
-    """Do úkolů doplní poslední reakci (komentář) z reakce_mapy."""
-    mapa = reakce_mapa()
+def _dopln_reakce(ukoly, mapa=None):
+    """Do úkolů doplní poslední reakci (komentář) z mapy reakcí."""
+    if mapa is None:
+        mapa = reakce_mapa()
     for u in ukoly:
         d = mapa.get(str(u["id"]))
         if d:
@@ -358,28 +362,44 @@ def _dopln_reakce(ukoly):
     return ukoly
 
 
+def ukoly_raw(tasklist_id, mapa=None):
+    """Živé stažení úkolů tasklistu z Freela (bez snapshotu). Pro snapshot i fallback."""
+    aktivni, hotove = [], []
+    r = _get(f"/tasklist/{tasklist_id}")
+    if r.status_code == 200:
+        tasks = _vytahni_seznam(r.json(), ("tasks", "data"))
+        aktivni = [_uorm(t, False) for t in tasks if isinstance(t, dict) and not _je_oddelovac(t)]
+    rf = _get(f"/tasklist/{tasklist_id}/finished-tasks")
+    if rf.status_code == 200:
+        ft = _vytahni_seznam(rf.json(), ("finished_tasks", "tasks", "data"))
+        hotove = [_uorm(t, True) for t in ft if isinstance(t, dict) and not _je_oddelovac(t)]
+    _dopln_reakce(aktivni, mapa)
+    _dopln_reakce(hotove, mapa)
+    return {"aktivni": aktivni, "hotove": hotove, "open_count": len(aktivni)}
+
+
 def ukoly_klienta(tasklist_id):
-    """Vrátí dict {aktivni:[...], hotove:[...], open_count:n} pro daný tasklist (s cache)."""
+    """Úkoly tasklistu. Přednostně ze snapshotu (rychlé, přesné), jinak živě s cache."""
     prazdny = {"aktivni": [], "hotove": [], "open_count": 0}
-    if not je_nakonfigurovano() or not tasklist_id:
+    if not tasklist_id:
+        return prazdny
+    # 1) snapshot
+    try:
+        from . import snapshot_freelo
+        ze_snapshotu = snapshot_freelo.tasklist(tasklist_id)
+        if ze_snapshotu is not None:
+            return ze_snapshotu
+    except Exception as e:
+        print(f"[freelo] snapshot read: {e}")
+    # 2) živě (fallback) s cache
+    if not je_nakonfigurovano():
         return prazdny
     ck = f"ukoly:{tasklist_id}"
     c = _cache_get(ck)
     if c is not None:
         return c
     try:
-        aktivni, hotove = [], []
-        r = _get(f"/tasklist/{tasklist_id}")
-        if r.status_code == 200:
-            tasks = _vytahni_seznam(r.json(), ("tasks", "data"))
-            aktivni = [_uorm(t, False) for t in tasks if isinstance(t, dict) and not _je_oddelovac(t)]
-        rf = _get(f"/tasklist/{tasklist_id}/finished-tasks")
-        if rf.status_code == 200:
-            ft = _vytahni_seznam(rf.json(), ("finished_tasks", "tasks", "data"))
-            hotove = [_uorm(t, True) for t in ft if isinstance(t, dict) and not _je_oddelovac(t)]
-        _dopln_reakce(aktivni)
-        _dopln_reakce(hotove)
-        return _cache_set(ck, {"aktivni": aktivni, "hotove": hotove, "open_count": len(aktivni)})
+        return _cache_set(ck, ukoly_raw(tasklist_id))
     except Exception as e:
         print(f"[freelo] ukoly: {e}")
         return prazdny
@@ -397,13 +417,16 @@ def prehled_resitelu(firmy):
     {jmeno: {jmeno, open, po_terminu, max_zpozdeni, bez_reakce, posledni, ukoly:[...]}}."""
     dnes = date.today()
     lide = {}
+
+    def _osoba(jm):
+        return lide.setdefault(jm, {"jmeno": jm, "open": 0, "po_terminu": 0, "max_zpozdeni": 0,
+                                    "bez_reakce": 0, "hotovo": 0, "posledni": None, "ukoly": []})
     for fid, nazev, tlid in firmy:
         if not tlid:
             continue
-        for u in ukoly_klienta(tlid)["aktivni"]:
-            jm = u["resitel"] or "— bez řešitele —"
-            e = lide.setdefault(jm, {"jmeno": jm, "open": 0, "po_terminu": 0,
-                                     "max_zpozdeni": 0, "bez_reakce": 0, "posledni": None, "ukoly": []})
+        data = ukoly_klienta(tlid)
+        for u in data["aktivni"]:
+            e = _osoba(u["resitel"] or "— bez řešitele —")
             e["open"] += 1
             if _bez_reakce(u):
                 e["bez_reakce"] += 1
@@ -419,19 +442,22 @@ def prehled_resitelu(firmy):
                     e["po_terminu"] += 1
                     e["max_zpozdeni"] = max(e["max_zpozdeni"], zp)
             e["ukoly"].append({**u, "firma": nazev, "firma_id": fid, "zpozdeni": max(zp, 0)})
+        for u in data["hotove"]:
+            _osoba(u["resitel"] or "— bez řešitele —")["hotovo"] += 1
     return lide
 
 
 def souhrn_tasklistu(tasklist_id):
     """Metriky jednoho tasklistu pro dlaždici/dashboard:
     {open, po_terminu, max_zpozdeni, bez_reakce, posledni_reakce, overdue_tasks:[...]}."""
-    z = {"open": 0, "po_terminu": 0, "max_zpozdeni": 0, "bez_reakce": 0,
+    z = {"open": 0, "po_terminu": 0, "max_zpozdeni": 0, "bez_reakce": 0, "hotovo": 0,
          "posledni_reakce": None, "overdue_tasks": []}
     if not tasklist_id:
         return z
     data = ukoly_klienta(tasklist_id)
     dnes = date.today()
     z["open"] = data["open_count"]
+    z["hotovo"] = len(data.get("hotove", []))
     for u in data["aktivni"]:
         # poslední reakce = nejnovější datum iterace napříč úkoly
         if u["posledni"] and (z["posledni_reakce"] is None or u["posledni"] > z["posledni_reakce"]):
