@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<p style="margin-bottom:6px"><a href="{{ url_for('main.operativa_resitele') }}">← Řešitelé</a></p>
+<h1 style="color:var(--navy);font-size:28px;margin:0 0 16px">{{ osoba.jmeno }}</h1>
+
+<div class="stats" style="margin-bottom:18px">
+  <div class="stat"><div class="num">{{ osoba.open }}</div><div class="lbl">Otevřených úkolů</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if osoba.po_terminu else 'var(--navy)' }}">{{ osoba.po_terminu }}</div><div class="lbl">Po termínu</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--red)' if osoba.max_zpozdeni else 'var(--navy)' }}">{{ osoba.max_zpozdeni }}</div><div class="lbl">Největší zpoždění (dní)</div></div>
+  <div class="stat"><div class="num" style="color:{{ 'var(--orange)' if osoba.bez_reakce else 'var(--navy)' }}">{{ osoba.bez_reakce }}</div><div class="lbl">Bez reakce</div></div>
+</div>
+
+<div class="tabulka">
+<table>
+  <thead><tr><th>Úkol</th><th>Klient</th><th>Termín</th><th style="text-align:right">Zpoždění</th><th>Poslední reakce</th></tr></thead>
+  <tbody>
+    {% for u in ukoly %}
+    <tr>
+      <td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a></td>
+      <td><a href="{{ url_for('main.operativa_klient', id=u.firma_id) }}">{{ u.firma }}</a></td>
+      <td style="color:{{ 'var(--red)' if u.zpozdeni else 'inherit' }}">{{ u.termin or '—' }}</td>
+      <td style="text-align:right;color:{{ 'var(--red)' if u.zpozdeni else 'inherit' }};font-weight:{{ '700' if u.zpozdeni else '400' }}">{{ (u.zpozdeni ~ ' dní') if u.zpozdeni else '—' }}</td>
+      <td>{% if u.dni_od_iterace is not none %}před {{ u.dni_od_iterace }} dny{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

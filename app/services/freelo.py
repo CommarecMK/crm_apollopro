@@ -13,7 +13,7 @@ TIMEOUT = 20
 
 # Krátkodobá cache (zrychluje dashboard a seznam klientů)
 _CACHE = {}
-CACHE_TTL = 180  # s
+CACHE_TTL = 300  # s
 
 
 def _cache_get(k):
@@ -42,6 +42,24 @@ def _hlavicky():
 def _get(path, params=None):
     return requests.get(f"{BASE}{path}", auth=(FREELO_EMAIL, FREELO_API_KEY),
                         headers=_hlavicky(), params=params, timeout=TIMEOUT)
+
+
+def _json(path):
+    """GET s krátkou cache → (status_code, parsed_json|None). Šetří opakované dotazy."""
+    ck = f"json:{path}"
+    c = _cache_get(ck)
+    if c is not None:
+        return c
+    try:
+        r = _get(path)
+        try:
+            data = r.json()
+        except Exception:
+            data = None
+        return _cache_set(ck, (r.status_code, data))
+    except Exception as e:
+        print(f"[freelo] GET {path}: {e}")
+        return (0, None)
 
 
 def _vytahni_seznam(obj, klice):
@@ -169,11 +187,10 @@ def popis_ukolu(task_id):
     if not je_nakonfigurovano() or not task_id:
         return {"text": "", "datum": None, "prilohy": []}
     try:
-        r = _get(f"/task/{task_id}/description")
-        if r.status_code != 200:
+        st, d = _json(f"/task/{task_id}/description")
+        if st != 200 or not isinstance(d, dict):
             return {"text": "", "datum": None, "prilohy": []}
-        d = r.json()
-        d = d.get("data", d) if isinstance(d, dict) else d
+        d = d.get("data", d)
         return {"text": _text(d.get("content")), "datum": _datum(d.get("date_add")),
                 "prilohy": _prilohy(d)}
     except Exception as e:
@@ -186,14 +203,17 @@ def ukol_detail(task_id):
     if not je_nakonfigurovano() or not task_id:
         return None
     try:
-        r = _get(f"/task/{task_id}")
-        if r.status_code != 200:
+        st, d = _json(f"/task/{task_id}")
+        if st != 200 or not isinstance(d, dict):
             return None
-        d = r.json()
-        t = d.get("data", d) if isinstance(d, dict) else d
+        t = d.get("data", d)
         posledni = _datum(t.get("date_edited_at") or t.get("date_edited"))
         # Komentáře jsou součástí detailu úkolu (samostatný GET endpoint neexistuje)
         komentare = [_komentar_orm(c) for c in _vytahni_seznam(t, ("comments",)) if isinstance(c, dict)]
+        # Poslední reakce = datum nejnovějšího komentáře (jinak poslední úprava)
+        datumy_kom = [k["datum"] for k in komentare if k["datum"]]
+        if datumy_kom:
+            posledni = max(datumy_kom)
         # Popis = samostatný endpoint /description (pinned komentář)
         popis = popis_ukolu(task_id)
         return {
@@ -222,10 +242,10 @@ def workers(project_id):
     if not je_nakonfigurovano() or not project_id:
         return []
     try:
-        r = _get(f"/project/{project_id}/workers")
-        if r.status_code != 200:
+        st, d = _json(f"/project/{project_id}/workers")
+        if st != 200 or not isinstance(d, dict):
             return []
-        ws = r.json().get("data", {}).get("workers", []) or r.json().get("workers", [])
+        ws = (d.get("data", {}) or {}).get("workers", []) or d.get("workers", [])
         return [(w.get("id"), w.get("fullname", "")) for w in ws]
     except Exception as e:
         print(f"[freelo] workers: {e}")
@@ -237,11 +257,11 @@ def subtasks(task_id):
     if not je_nakonfigurovano() or not task_id:
         return []
     try:
-        r = _get(f"/task/{task_id}/subtasks")
-        if r.status_code != 200:
+        st, d = _json(f"/task/{task_id}/subtasks")
+        if st != 200 or d is None:
             return []
         out = []
-        for s in _vytahni_seznam(r.json(), ("subtasks", "tasks", "taskchecks", "data")):
+        for s in _vytahni_seznam(d, ("subtasks", "tasks", "taskchecks", "data")):
             if not isinstance(s, dict):
                 continue
             stav = s.get("state")
@@ -283,6 +303,61 @@ def pridej_komentar(task_id, text):
         return False
 
 
+def _id_ukolu_z_komentare(c):
+    """Z komentáře (z /all-comments) vytáhne ID úkolu, ať je reference kdekoli."""
+    for kandidat in (c.get("task_id"),
+                     (c.get("task") or {}).get("id") if isinstance(c.get("task"), dict) else None,
+                     (c.get("related_object") or {}).get("id") if isinstance(c.get("related_object"), dict) else None,
+                     (c.get("related") or {}).get("id") if isinstance(c.get("related"), dict) else None):
+        if kandidat:
+            return str(kandidat)
+    return None
+
+
+def reakce_mapa(max_stran=8):
+    """{task_id(str): 'YYYY-MM-DD'} = datum POSLEDNÍHO komentáře u úkolu.
+    Jedním (stránkovaným) dotazem /all-comments místo dotazu na každý úkol. Cache."""
+    ck = "reakce_mapa"
+    c = _cache_get(ck)
+    if c is not None:
+        return c
+    out = {}
+    try:
+        for p in range(max_stran):
+            st, d = _json(f"/all-comments?type=task&order_by=date_add&order=desc&p={p}")
+            if st != 200 or not d:
+                break
+            coms = _vytahni_seznam(d, ("comments", "data"))
+            if not coms:
+                break
+            for cc in coms:
+                if not isinstance(cc, dict):
+                    continue
+                tid = _id_ukolu_z_komentare(cc)
+                dt = _datum(cc.get("date_add") or cc.get("date"))
+                if tid and dt and tid not in out:  # desc pořadí → první výskyt = nejnovější
+                    out[tid] = dt
+            if len(coms) < 20:
+                break
+    except Exception as e:
+        print(f"[freelo] reakce_mapa: {e}")
+    return _cache_set(ck, out)
+
+
+def _dopln_reakce(ukoly):
+    """Do úkolů doplní poslední reakci (komentář) z reakce_mapy."""
+    mapa = reakce_mapa()
+    for u in ukoly:
+        d = mapa.get(str(u["id"]))
+        if d:
+            u["posledni"] = d
+            u["dni_od_iterace"] = _dni_od(d)
+            u["komentaru"] = 1
+        else:
+            u["komentaru"] = 0
+    return ukoly
+
+
 def ukoly_klienta(tasklist_id):
     """Vrátí dict {aktivni:[...], hotove:[...], open_count:n} pro daný tasklist (s cache)."""
     prazdny = {"aktivni": [], "hotove": [], "open_count": 0}
@@ -302,10 +377,49 @@ def ukoly_klienta(tasklist_id):
         if rf.status_code == 200:
             ft = _vytahni_seznam(rf.json(), ("finished_tasks", "tasks", "data"))
             hotove = [_uorm(t, True) for t in ft if isinstance(t, dict) and not _je_oddelovac(t)]
+        _dopln_reakce(aktivni)
+        _dopln_reakce(hotove)
         return _cache_set(ck, {"aktivni": aktivni, "hotove": hotove, "open_count": len(aktivni)})
     except Exception as e:
         print(f"[freelo] ukoly: {e}")
         return prazdny
+
+
+def _bez_reakce(u):
+    """Úkol bez reakce = od zadání se nic nestalo (žádná iterace/komentář)."""
+    if u.get("komentaru"):
+        return False
+    return not u["posledni"] or (u["zadan"] and u["posledni"] <= u["zadan"])
+
+
+def prehled_resitelu(firmy):
+    """firmy = list (firma_id, nazev, tasklist_id). Vrátí agregaci úkolů podle řešitele:
+    {jmeno: {jmeno, open, po_terminu, max_zpozdeni, bez_reakce, posledni, ukoly:[...]}}."""
+    dnes = date.today()
+    lide = {}
+    for fid, nazev, tlid in firmy:
+        if not tlid:
+            continue
+        for u in ukoly_klienta(tlid)["aktivni"]:
+            jm = u["resitel"] or "— bez řešitele —"
+            e = lide.setdefault(jm, {"jmeno": jm, "open": 0, "po_terminu": 0,
+                                     "max_zpozdeni": 0, "bez_reakce": 0, "posledni": None, "ukoly": []})
+            e["open"] += 1
+            if _bez_reakce(u):
+                e["bez_reakce"] += 1
+            if u["posledni"] and (e["posledni"] is None or u["posledni"] > e["posledni"]):
+                e["posledni"] = u["posledni"]
+            zp = 0
+            if u["termin"]:
+                try:
+                    zp = (dnes - date.fromisoformat(u["termin"])).days
+                except Exception:
+                    zp = 0
+                if zp > 0:
+                    e["po_terminu"] += 1
+                    e["max_zpozdeni"] = max(e["max_zpozdeni"], zp)
+            e["ukoly"].append({**u, "firma": nazev, "firma_id": fid, "zpozdeni": max(zp, 0)})
+    return lide
 
 
 def souhrn_tasklistu(tasklist_id):
@@ -353,6 +467,10 @@ def diagnostika(tasklist_id=None, task_id=None):
             rt = _get(f"/tasklist/{tasklist_id}")
             out["tasklist_status"] = rt.status_code
             out["tasklist_ukazka"] = (rt.text or "")[:400]
+        rac = _get("/all-comments?type=task&order_by=date_add&order=desc&p=0")
+        out["all_comments_status"] = rac.status_code
+        out["all_comments_ukazka"] = (rac.text or "")[:900]
+        out["reakce_mapa_pocet"] = len(reakce_mapa())
         if task_id:
             rk = _get(f"/task/{task_id}")
             out["task_status"] = rk.status_code

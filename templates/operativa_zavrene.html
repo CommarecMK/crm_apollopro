@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Zavřené úkoly</h1>
+<p class="muted" style="margin-bottom:18px">Dokončené úkoly napříč napojenými klienty — {{ pocet }} celkem.</p>
+
+<div class="tabulka">
+<table>
+  <thead><tr><th>Úkol</th><th>Klient</th><th>Řešitel</th><th>Termín</th><th>Dokončeno</th></tr></thead>
+  <tbody>
+    {% for u in radky %}
+    <tr style="opacity:.85">
+      <td><a href="{{ url_for('main.ukol_detail', task_id=u.id) }}">{{ u.nazev }}</a></td>
+      <td><a href="{{ url_for('main.operativa_klient', id=u.firma_id) }}">{{ u.firma }}</a></td>
+      <td>{{ u.resitel or '—' }}</td>
+      <td>{{ u.termin or '—' }}</td>
+      <td>{{ u.posledni or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted" style="text-align:center;padding:18px">Žádné zavřené úkoly.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

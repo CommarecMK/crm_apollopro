@@ -653,6 +653,50 @@ def operativa():
                            freelo_ok=freelo_service.je_nakonfigurovano())
 
 
+@bp.route("/operativa/resitele")
+@login_required
+def operativa_resitele():
+    if not freelo_service.je_nakonfigurovano():
+        flash("Freelo není nakonfigurované.", "error")
+        return redirect(url_for("main.operativa"))
+    napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
+    lide = freelo_service.prehled_resitelu([(f.id, f.nazev, f.freelo_tasklist_id) for f in napojene])
+    radky = sorted(lide.values(), key=lambda x: (-x["po_terminu"], -x["open"]))
+    return render_template("operativa_resitele.html", radky=radky)
+
+
+@bp.route("/operativa/resitel/<path:jmeno>")
+@login_required
+def operativa_resitel(jmeno):
+    if not freelo_service.je_nakonfigurovano():
+        flash("Freelo není nakonfigurované.", "error")
+        return redirect(url_for("main.operativa"))
+    napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
+    lide = freelo_service.prehled_resitelu([(f.id, f.nazev, f.freelo_tasklist_id) for f in napojene])
+    osoba = lide.get(jmeno)
+    if not osoba:
+        flash("Řešitel nenalezen nebo nemá otevřené úkoly.", "info")
+        return redirect(url_for("main.operativa_resitele"))
+    ukoly = sorted(osoba["ukoly"], key=lambda x: -x["zpozdeni"])
+    return render_template("operativa_resitel.html", osoba=osoba, ukoly=ukoly)
+
+
+@bp.route("/operativa/zavrene")
+@login_required
+def operativa_zavrene():
+    if not freelo_service.je_nakonfigurovano():
+        flash("Freelo není nakonfigurované.", "error")
+        return redirect(url_for("main.operativa"))
+    napojene = _bez_internich(Firma.query).filter(Firma.freelo_tasklist_id.isnot(None)).all()
+    radky = []
+    for f in napojene:
+        for u in freelo_service.ukoly_klienta(f.freelo_tasklist_id)["hotove"]:
+            radky.append({**u, "firma": f.nazev, "firma_id": f.id})
+    # nejnověji dokončené nahoře (dle poslední aktivity)
+    radky.sort(key=lambda x: x.get("posledni") or "", reverse=True)
+    return render_template("operativa_zavrene.html", radky=radky, pocet=len(radky))
+
+
 @bp.route("/operativa/<int:id>")
 @login_required
 def operativa_klient(id):
