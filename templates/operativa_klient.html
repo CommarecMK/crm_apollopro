@@ -123,30 +123,40 @@
   const CSRF="{{ csrf_token() }}";
   const modal=document.getElementById('ukolyModal'), seznam=document.getElementById('ukolySeznam'),
         stav=document.getElementById('navrhStav'), vysl=document.getElementById('ukolyVysledek');
-  let RESENI=[];
+  let RESENI=[], EXIST=[];
   const istyl="padding:7px 9px;border:1px solid var(--n7);border-radius:7px;font-family:inherit;font-size:13px";
   function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
   function zavri(){modal.style.display='none';}
   document.getElementById('modalZavri').onclick=zavri;
   document.getElementById('modalZrusit').onclick=zavri;
   function optReseni(){return '<option value="">— bez řešitele —</option>'+RESENI.map(r=>'<option value="'+r[0]+'">'+esc(r[1])+'</option>').join('');}
+  function optCil(sel){return '<option value="">— vyber cílový úkol —</option>'+EXIST.map(t=>'<option value="'+t[0]+'"'+(String(sel)===String(t[0])?' selected':'')+'>'+esc(t[1])+'</option>').join('');}
   function radek(u){
     const dup=!!u.podobny;
-    const akceOpts = u.podobny_id
-      ? '<option value="preskocit">Přeskočit (duplicita)</option><option value="komentar">Komentář k podobnému</option><option value="podukol">Přidat jako podúkol</option><option value="novy">Vytvořit přesto nový</option>'
-      : '<option value="novy">Vytvořit nový úkol</option><option value="preskocit">Přeskočit</option>';
+    const vych = u.podobny_id ? 'komentar' : 'novy';
     const upoz = dup
       ? '<div style="background:#fff5ec;border-radius:7px;padding:7px 10px;margin-bottom:8px;font-size:12px;color:#8a4b1f">⚠ Podobný úkol už existuje: <b>'+esc(u.podobny)+'</b>'+(u.duvod?' — '+esc(u.duvod):'')+'</div>'
       : (u.duvod?'<div style="font-size:12px;color:#667;margin-bottom:6px">'+esc(u.duvod)+'</div>':'');
-    return '<div class="urow-ai" data-pid="'+(u.podobny_id||'')+'" style="border:1px solid '+(dup?'#f3c2a0':'var(--n8)')+';border-radius:9px;padding:10px 12px;margin-bottom:8px">'
+    function opt(v,l){return '<option value="'+v+'"'+(vych===v?' selected':'')+'>'+l+'</option>';}
+    return '<div class="urow-ai" style="border:1px solid '+(dup?'#f3c2a0':'var(--n8)')+';border-radius:9px;padding:10px 12px;margin-bottom:8px">'
       + upoz
       + '<input class="u-nazev" value="'+esc(u.nazev)+'" style="'+istyl+';width:100%;font-weight:600">'
       + '<textarea class="u-popis" rows="2" style="'+istyl+';width:100%;margin-top:8px;resize:vertical">'+esc(u.popis||'')+'</textarea>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">'
+      + '<select class="u-akce" style="'+istyl+'">'+opt('novy','Nový úkol')+opt('podukol','Podúkol existujícího')+opt('komentar','Komentář k existujícímu')+'<option value="preskocit">Přeskočit</option></select>'
+      + '<select class="u-cil" style="'+istyl+';flex:1;min-width:180px"'+(vych==='novy'?' disabled':'')+'>'+optCil(u.podobny_id)+'</select>'
+      + '</div>'
       + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
-      + '<select class="u-akce" style="'+istyl+'">'+akceOpts+'</select>'
       + '<select class="u-res" style="'+istyl+';flex:1;min-width:150px">'+optReseni()+'</select>'
       + '<input type="date" class="u-termin" value="'+esc(u.termin||'')+'" style="'+istyl+'"></div></div>';
   }
+  // přepínání cílového úkolu podle akce
+  seznam.addEventListener('change', function(e){
+    if(e.target.classList.contains('u-akce')){
+      const cil=e.target.closest('.urow-ai').querySelector('.u-cil');
+      cil.disabled = (e.target.value==='novy' || e.target.value==='preskocit');
+    }
+  });
   async function spustNavrh(fd, btn){
     const puv = btn ? btn.textContent : null;
     if(btn){ btn.disabled=true; btn.textContent='AI pracuje…'; }
@@ -156,7 +166,7 @@
       const j=await r.json(); if(stav) stav.textContent='';
       if(j.chyba){ if(stav) stav.textContent=j.chyba; else alert(j.chyba); return; }
       if(!j.ukoly||!j.ukoly.length){ const m='AI nenašla žádné konkrétní úkoly. Zkus jiný dokument nebo upřesni text.'; if(stav) stav.textContent=m; else alert(m); return; }
-      RESENI=j.reseni||[]; seznam.innerHTML=j.ukoly.map(radek).join(''); vysl.textContent='';
+      RESENI=j.reseni||[]; EXIST=j.existujici||[]; seznam.innerHTML=j.ukoly.map(radek).join(''); vysl.textContent='';
       modal.style.display='flex';
     }catch(err){ if(stav) stav.textContent='Chyba spojení.'; }
     finally{ if(btn){ btn.disabled=false; btn.textContent=puv; } }
@@ -164,16 +174,19 @@
   form.addEventListener('submit',e=>{e.preventDefault();spustNavrh(new FormData(form),form.querySelector('button[type=submit]'));});
   window.navrhZText=function(t,btn){ if(!t) return; const fd=new FormData(); fd.append('text',t); fd.append('csrf_token',CSRF); spustNavrh(fd,btn); };
   document.getElementById('odeslatUkoly').addEventListener('click',async (e)=>{
-    const ukoly=[];
+    const ukoly=[]; let chybiCil=false;
     seznam.querySelectorAll('.urow-ai').forEach(row=>{
       const akce=row.querySelector('.u-akce').value;
       if(akce==='preskocit') return;
+      const cil=row.querySelector('.u-cil').value;
+      if((akce==='podukol'||akce==='komentar') && !cil){ chybiCil=true; return; }
       ukoly.push({nazev:row.querySelector('.u-nazev').value.trim(),
                   popis:row.querySelector('.u-popis').value.trim(),
                   worker_id:row.querySelector('.u-res').value,
                   termin:row.querySelector('.u-termin').value,
-                  akce:akce, podobny_id:row.dataset.pid||null});
+                  akce:akce, cil_id:cil||null});
     });
+    if(chybiCil){vysl.style.color='var(--orange)';vysl.textContent='U akce „podúkol/komentář" vyber cílový úkol.';return;}
     if(!ukoly.length){vysl.style.color='';vysl.textContent='Nevybral jsi žádný úkol (vše přeskočeno).';return;}
     const btn=e.target; btn.disabled=true; const puv=btn.textContent; btn.textContent='Odesílám…';
     vysl.style.color=''; vysl.textContent='Odesílám do Freela…';

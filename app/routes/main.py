@@ -775,7 +775,11 @@ def operativa_navrh_ukolu(id):
     pid = freelo_service.project_id_pro_tasklist(firma.freelo_tasklist_id)
     if pid:
         reseni = freelo_service.workers(pid)
-    return jsonify({**vysledek, "reseni": reseni})
+    existujici = []
+    if firma.freelo_tasklist_id:
+        d = freelo_service.ukoly_klienta(firma.freelo_tasklist_id)
+        existujici = [[u["id"], u["nazev"]] for u in d.get("aktivni", []) if u.get("id")]
+    return jsonify({**vysledek, "reseni": reseni, "existujici": existujici})
 
 
 @bp.route("/operativa/<int:id>/vytvor-ukoly", methods=["POST"])
@@ -792,7 +796,7 @@ def operativa_vytvor_ukoly(id):
         if not nazev:
             continue
         akce = u.get("akce", "novy")
-        cil = u.get("podobny_id")
+        cil = u.get("cil_id") or u.get("podobny_id")
         if akce == "komentar" and cil:
             ok = freelo_service.pridej_komentar(cil, f"{nazev}\n{u.get('popis', '')}", auth=auth)
             info = "ok" if ok else "komentář selhal"
