@@ -16,15 +16,22 @@
   <button type="button" id="oznacVse" class="btn btn-ghost" style="font-size:12px;padding:6px 12px">Označit vše</button>
   <button type="button" id="odznacVse" class="btn btn-ghost" style="font-size:12px;padding:6px 12px">Odznačit vše</button>
 </div>
-<div id="pmBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px"></div>
+<div id="pmBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+  <span class="muted" style="font-size:13px">Období (hodiny):</span>
+  <select id="mOd" style="padding:6px 9px;border:1px solid var(--n7);border-radius:7px;font-family:inherit;font-size:13px"></select>
+  <span class="muted">–</span>
+  <select id="mDo" style="padding:6px 9px;border:1px solid var(--n7);border-radius:7px;font-family:inherit;font-size:13px"></select>
+</div>
 
 <div class="stats" style="margin-bottom:18px">
-  <div class="stat"><div class="num" id="kHodTot">0</div><div class="lbl">Hodin celkem</div></div>
-  <div class="stat"><div class="num" id="kHod" style="color:var(--green)">0</div><div class="lbl">Fakturovatelné</div></div>
-  <div class="stat"><div class="num" id="kHodNon" style="color:var(--orange)">0</div><div class="lbl">Nefakturovatelné</div></div>
-  <div class="stat"><div class="num" id="kTrzby">0</div><div class="lbl">Tržby Kč</div></div>
-  <div class="stat"><div class="num" id="kPlan">0</div><div class="lbl">Plán Kč</div></div>
-  <div class="stat"><div class="num" id="kNapln">0 %</div><div class="lbl">Naplnění</div></div>
+  <div class="stat"><div class="num" id="kHodTot">0</div><div class="lbl">Hodin celkem (období)</div></div>
+  <div class="stat"><div class="num" id="kHod" style="color:var(--green)">0</div><div class="lbl">Fakturovatelné (období)</div></div>
+  <div class="stat"><div class="num" id="kHodNon" style="color:var(--orange)">0</div><div class="lbl">Nefakturovatelné (období)</div></div>
+  <div class="stat"><div class="num" id="kTrzby">0</div><div class="lbl">Tržby Kč (rok)</div></div>
+  <div class="stat"><div class="num" id="kPlan">0</div><div class="lbl">Plán Kč (rok)</div></div>
+  <div class="stat"><div class="num" id="kNapln">0 %</div><div class="lbl">Naplnění (rok)</div></div>
   <div class="stat"><div class="num" id="kZak">0</div><div class="lbl">Zakázek</div></div>
 </div>
 
@@ -90,11 +97,18 @@
   });
   document.getElementById('oznacVse').addEventListener('click',()=>{jmena.forEach(j=>{vybrane.add(j);stav(j);});prepocti();});
   document.getElementById('odznacVse').addEventListener('click',()=>{jmena.forEach(j=>{vybrane.delete(j);stav(j);});prepocti();});
+  // výběr měsíců
+  const mOd=document.getElementById('mOd'), mDo=document.getElementById('mDo');
+  LABELS.forEach((l,i)=>{mOd.insertAdjacentHTML('beforeend','<option value="'+i+'">'+l+'</option>');mDo.insertAdjacentHTML('beforeend','<option value="'+i+'">'+l+'</option>');});
+  mOd.value=0; mDo.value=LABELS.length-1;
+  mOd.addEventListener('change',prepocti); mDo.addEventListener('change',prepocti);
   let chH=null, chZ=null, chP=null;
   function prepocti(){
     const sel=jmena.filter(j=>vybrane.has(j));
+    let od=+mOd.value, do_=+mDo.value; if(od>do_){const t=od;od=do_;do_=t;}
+    const idx=[]; for(let i=od;i<=do_;i++) idx.push(i);
     let hod=0,tot=0,trzby=0,plan=0,zak=0;
-    sel.forEach(j=>{hod+=PM[j].hodin_bill;tot+=PM[j].hodin_tot;trzby+=PM[j].trzby;plan+=PM[j].plan;zak+=PM[j].zakazky.length;});
+    sel.forEach(j=>{idx.forEach(i=>{hod+=PM[j].hodiny_bill[i];tot+=PM[j].hodiny_tot[i];});trzby+=PM[j].trzby;plan+=PM[j].plan;zak+=PM[j].zakazky.length;});
     document.getElementById('kHodTot').textContent=fmt(tot);
     document.getElementById('kHod').textContent=fmt(hod);
     document.getElementById('kHodNon').textContent=fmt(Math.max(tot-hod,0));
@@ -102,9 +116,10 @@
     document.getElementById('kPlan').textContent=fmt(plan);
     document.getElementById('kNapln').textContent=(plan?Math.round(100*trzby/plan):0)+' %';
     document.getElementById('kZak').textContent=zak;
-    const ds=sel.map(j=>({label:j,data:PM[j].hodiny_bill,borderColor:barva[j],backgroundColor:barva[j],tension:.3,fill:false}));
+    const labs=idx.map(i=>LABELS[i]);
+    const ds=sel.map(j=>({label:j,data:idx.map(i=>PM[j].hodiny_bill[i]),borderColor:barva[j],backgroundColor:barva[j],tension:.3,fill:false}));
     if(chH) chH.destroy();
-    chH=new Chart(document.getElementById('grafHodiny'),{type:'line',data:{labels:LABELS,datasets:ds},
+    chH=new Chart(document.getElementById('grafHodiny'),{type:'line',data:{labels:labs,datasets:ds},
       options:{responsive:true,plugins:{legend:{display:sel.length>1,position:'bottom'}},scales:{y:{beginAtZero:true}}}});
     const proj={}; sel.forEach(j=>{const p=PM[j].projekty||{}; for(const k in p){proj[k]=(proj[k]||0)+p[k];}});
     let pe=Object.entries(proj).sort((a,b)=>b[1]-a[1]).slice(0,12);
