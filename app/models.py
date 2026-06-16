@@ -132,6 +132,20 @@ class TachometrStav(db.Model):
     stav_km    = db.Column(db.Integer, nullable=False, default=0)
 
 
+class Tankovani(db.Model):
+    """Tankování — z CCS faktury nebo ruční (platba kartou). Slouží jako kotvy pro knihu jízd."""
+    __tablename__ = "tankovani"
+    id         = db.Column(db.Integer, primary_key=True)
+    vozidlo_id = db.Column(db.Integer, db.ForeignKey("vozidlo.id"), nullable=True, index=True)
+    spz_raw    = db.Column(db.String(30))      # SPZ jak přečtena (kvůli párování)
+    datum      = db.Column(db.Date, index=True)
+    misto      = db.Column(db.String(300))     # adresa/město čerpací stanice
+    litry      = db.Column(db.Float)
+    castka     = db.Column(db.Float)
+    zdroj      = db.Column(db.String(10), default="ccs")  # ccs | karta
+    vozidlo    = db.relationship("Vozidlo")
+
+
 class KlientDokument(db.Model):
     """Indexovaný dokument klienta z OneDrive — extrahovaný text + metadata (pro hledání a AI)."""
     __tablename__ = "klient_dokument"

@@ -2,7 +2,83 @@
 {% block content %}
 {% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px;background:#fff" %}
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Kniha jízd</h1>
-<p class="muted" style="margin-bottom:18px">Vozidla a měsíční stav tachometru. (Dále: import CCS, generování jízd, export do OneDrive.)</p>
+<p class="muted" style="margin-bottom:14px">Vozidla, tachometr, tankování (CCS i ruční). Dále: generování jízd + export do OneDrive.</p>
+
+<!-- Import CCS faktury -->
+<div class="stat" style="margin-bottom:18px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Import CCS faktury (PDF)</h3>
+  <form id="ccsForm" data-noload style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="soubor" accept=".pdf" required style="font-size:13px">
+    <button class="btn" type="submit">Načíst fakturu (AI)</button>
+    <span id="ccsStav" class="muted" style="font-size:13px"></span>
+  </form>
+</div>
+
+<div id="ccsModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:86vh;overflow:auto;padding:20px 22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 class="druk" style="color:var(--navy);font-size:18px;margin:0">Tankování z faktury — zkontroluj a ulož</h3>
+      <button type="button" id="ccsZavri" style="border:none;background:none;font-size:24px;cursor:pointer;color:#889">×</button>
+    </div>
+    <div class="tabulka"><table>
+      <thead><tr><th></th><th>Datum</th><th>Vozidlo</th><th>Místo</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th></tr></thead>
+      <tbody id="ccsRadky"></tbody>
+    </table></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+      <button type="button" class="btn btn-ghost" id="ccsZrusit">Zrušit</button>
+      <button type="button" class="btn" id="ccsUloz">Uložit vybrané</button>
+    </div>
+    <div id="ccsVysledek" style="font-size:13px;margin-top:8px"></div>
+  </div>
+</div>
+<script>
+(function(){
+  const form=document.getElementById('ccsForm'); if(!form) return;
+  const CSRF="{{ csrf_token() }}", VOZ={{ vozidla_sel|tojson }};
+  const modal=document.getElementById('ccsModal'), tbody=document.getElementById('ccsRadky'),
+        stav=document.getElementById('ccsStav'), vysl=document.getElementById('ccsVysledek');
+  const istyl="padding:5px 7px;border:1px solid var(--n7);border-radius:6px;font-family:inherit;font-size:13px";
+  function esc(s){return (s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function optVoz(sel){return '<option value="">— nezařazeno —</option>'+VOZ.map(v=>'<option value="'+v[0]+'"'+(String(sel)===String(v[0])?' selected':'')+'>'+esc(v[1])+'</option>').join('');}
+  document.getElementById('ccsZavri').onclick=()=>modal.style.display='none';
+  document.getElementById('ccsZrusit').onclick=()=>modal.style.display='none';
+  form.addEventListener('submit',async e=>{
+    e.preventDefault(); const b=form.querySelector('button[type=submit]'); b.disabled=true; const pv=b.textContent; b.textContent='AI čte fakturu…'; stav.textContent='';
+    try{
+      const r=await fetch("{{ url_for('main.kniha_ccs_import', ) }}",{method:'POST',headers:{'X-CSRFToken':CSRF},body:new FormData(form)});
+      const j=await r.json();
+      if(j.chyba){stav.textContent=j.chyba;return;}
+      if(!j.radky||!j.radky.length){stav.textContent='Nenašel jsem žádná tankování.';return;}
+      tbody.innerHTML=j.radky.map(x=>'<tr>'
+        +'<td><input type="checkbox" class="t-ch" checked></td>'
+        +'<td><input class="t-datum" value="'+esc(x.datum)+'" style="'+istyl+';width:110px"></td>'
+        +'<td><select class="t-voz" style="'+istyl+'">'+optVoz(x.vozidlo_id)+'</select><div class="muted" style="font-size:10px">'+esc(x.spz||'')+'</div></td>'
+        +'<td><input class="t-misto" value="'+esc(x.misto)+'" style="'+istyl+';width:100%"></td>'
+        +'<td style="text-align:right"><input class="t-litry" value="'+esc(x.litry)+'" style="'+istyl+';width:70px;text-align:right"></td>'
+        +'<td style="text-align:right"><input class="t-castka" value="'+esc(x.castka)+'" style="'+istyl+';width:80px;text-align:right"></td></tr>').join('');
+      vysl.textContent=''; modal.style.display='flex';
+    }catch(err){stav.textContent='Chyba spojení.';}
+    finally{b.disabled=false;b.textContent=pv;}
+  });
+  document.getElementById('ccsUloz').addEventListener('click',async (e)=>{
+    const radky=[];
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      if(!tr.querySelector('.t-ch').checked) return;
+      radky.push({datum:tr.querySelector('.t-datum').value,vozidlo_id:tr.querySelector('.t-voz').value||null,
+        spz:tr.querySelector('.t-voz').selectedOptions[0].textContent,misto:tr.querySelector('.t-misto').value,
+        litry:tr.querySelector('.t-litry').value,castka:tr.querySelector('.t-castka').value,zdroj:'ccs'});
+    });
+    if(!radky.length){vysl.textContent='Nic vybráno.';return;}
+    const b=e.target;b.disabled=true;b.textContent='Ukládám…';
+    try{
+      const r=await fetch("{{ url_for('main.kniha_tankovani_uloz') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({radky})});
+      const j=await r.json(); vysl.style.color='var(--green)'; vysl.textContent='Uloženo '+j.ulozeno+' tankování. Obnov stránku.';
+    }catch(err){vysl.style.color='var(--red)';vysl.textContent='Chyba spojení.';}
+    finally{b.disabled=false;b.textContent='Uložit vybrané';}
+  });
+})();
+</script>
 
 {% for d in data %}
 <div class="stat" style="margin-bottom:14px;{{ 'opacity:.65' if not d.v.aktivni }}">
@@ -41,6 +117,37 @@
   </div>
   {% endif %}
 
+  {% if d.tankovani %}
+  <div class="tabulka" style="margin-top:10px">
+  <table>
+    <thead><tr><th>Tankování — datum</th><th>Místo</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th>Zdroj</th><th></th></tr></thead>
+    <tbody>
+      {% for t in d.tankovani %}
+      <tr><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.misto or '—' }}</td>
+        <td style="text-align:right">{{ t.litry or '' }}</td><td style="text-align:right">{{ "{:,.0f}".format(t.castka).replace(",", " ") if t.castka else '' }}</td>
+        <td>{% if t.zdroj=='karta' %}<span class="tag" style="background:#fff0e6;color:var(--orange)">karta</span>{% else %}<span class="tag">CCS</span>{% endif %}</td>
+        <td style="text-align:right"><form method="post" action="{{ url_for('main.kniha_tankovani_smazat', id=t.id) }}" onsubmit="return confirm('Smazat tankování?')" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">×</button></form></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  <details style="margin-top:8px">
+    <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">+ Ruční tankování (platba kartou)</summary>
+    <form method="post" action="{{ url_for('main.kniha_tankovani_rucni') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="vozidlo_id" value="{{ d.v.id }}">
+      <input type="date" name="datum" required style="{{ istyl }}">
+      <input type="text" name="misto" placeholder="Místo / čerpací stanice" style="{{ istyl }};flex:1;min-width:180px">
+      <input type="text" name="litry" placeholder="litry" style="{{ istyl }};width:90px">
+      <input type="text" name="castka" placeholder="Kč" style="{{ istyl }};width:100px">
+      <button class="btn btn-ghost" type="submit" style="font-size:13px">Přidat</button>
+    </form>
+  </details>
+
   <details style="margin-top:10px">
     <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">Upravit vozidlo</summary>
     <form method="post" action="{{ url_for('main.vozidlo_upravit', id=d.v.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
@@ -60,6 +167,22 @@
 {% else %}
 <p class="muted">Zatím žádná vozidla — přidej první níže.</p>
 {% endfor %}
+
+{% if nezarazene %}
+<div class="note" style="border-left-color:var(--orange)">
+  <b>{{ nezarazene|length }} tankování nemá přiřazené vozidlo</b> (SPZ se nenašla mezi vozidly). Přidej chybějící vozidlo, nebo je smaž:
+  <div class="tabulka" style="margin-top:8px"><table>
+    <thead><tr><th>Datum</th><th>SPZ (z faktury)</th><th>Místo</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th></th></tr></thead>
+    <tbody>
+      {% for t in nezarazene %}
+      <tr><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.spz_raw or '?' }}</td><td>{{ t.misto or '—' }}</td>
+        <td style="text-align:right">{{ t.litry or '' }}</td><td style="text-align:right">{{ "{:,.0f}".format(t.castka).replace(",", " ") if t.castka else '' }}</td>
+        <td style="text-align:right"><form method="post" action="{{ url_for('main.kniha_tankovani_smazat', id=t.id) }}" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">×</button></form></td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
 
 <h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Přidat vozidlo</h2>
 <form method="post" action="{{ url_for('main.vozidlo_novy') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:#fff;padding:16px 18px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">

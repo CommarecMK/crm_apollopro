@@ -116,6 +116,68 @@ def navrhni_ukoly(firma, text):
     return {"ukoly": ukoly, "chyba": None}
 
 
+def _claude_pdf(system, pdf_bytes, max_tokens=4000):
+    """Pošle PDF přímo Claudovi (dokument blok) — funguje i na skeny. Vrátí (text, chyba)."""
+    global _FUNKCNI_MODEL
+    import base64
+    try:
+        import anthropic
+    except Exception as e:
+        return None, f"chybí anthropic: {e}"
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    b64 = base64.standard_b64encode(pdf_bytes).decode()
+    poradi = [_FUNKCNI_MODEL] if _FUNKCNI_MODEL else MODELY
+    posledni = None
+    for model in poradi:
+        try:
+            msg = client.messages.create(model=model, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": [
+                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}},
+                    {"type": "text", "text": "Vytáhni data podle instrukcí."}]}])
+            _FUNKCNI_MODEL = model
+            return msg.content[0].text, None
+        except Exception as e:
+            posledni = f"{model}: {e}"
+            if "not_found" not in str(e) and "404" not in str(e):
+                break
+    return None, posledni
+
+
+def nacti_ccs_fakturu(pdf_bytes):
+    """Z CCS faktury (PDF) vytáhne tankování. Vrací {radky:[{datum,spz,misto,litry,castka}], chyba}."""
+    if not ma_ai():
+        return {"radky": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
+    from . import extrakce
+    system = ("Z přiložené faktury CCS (palivové karty) vytáhni JEDNOTLIVÁ tankování/transakce. "
+              "Vrať POUZE JSON pole objektů: "
+              '[{"datum":"YYYY-MM-DD","spz":"SPZ vozidla","misto":"adresa nebo město čerpací stanice",'
+              '"litry":číslo_litrů,"castka":částka_v_Kč}]. '
+              "Bez dalšího textu. Částky a litry jako čísla (tečka desetinná). Když údaj chybí, dej null.")
+    text = extrakce.extrahuj_text(pdf_bytes, "ccs.pdf") or ""
+    if len(text.strip()) > 200:
+        odp, chyba = _claude(system, "Text faktury CCS:\n" + text[:20000], max_tokens=4000)
+    else:
+        odp, chyba = _claude_pdf(system, pdf_bytes, max_tokens=4000)
+    if not odp:
+        return {"radky": [], "chyba": f"AI chyba: {chyba}"}
+    data = _parse_json(odp)
+    if not isinstance(data, list):
+        return {"radky": [], "chyba": "AI nevrátila platná data faktury."}
+    radky = []
+    for r in data:
+        if not isinstance(r, dict):
+            continue
+        def _f(v):
+            try:
+                return round(float(str(v).replace(",", ".").replace(" ", "")), 2)
+            except (ValueError, TypeError):
+                return None
+        radky.append({"datum": (r.get("datum") or "")[:10], "spz": str(r.get("spz") or "").strip().upper(),
+                      "misto": str(r.get("misto") or "").strip()[:300],
+                      "litry": _f(r.get("litry")), "castka": _f(r.get("castka"))})
+    return {"radky": radky, "chyba": None}
+
+
 def navrhni_slozku(filename, cesty):
     """Navrhne složku pro soubor. Vrací {cesta, duvod}."""
     if not filename or not cesty or not ma_ai():

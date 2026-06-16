@@ -680,7 +680,7 @@ def cashflow():
 @bp.route("/kniha-jizd")
 @finance_required
 def kniha_jizd():
-    from ..models import Vozidlo
+    from ..models import Vozidlo, Tankovani
     vozidla = Vozidlo.query.order_by(Vozidlo.aktivni.desc(), Vozidlo.spz).all()
     data = []
     for v in vozidla:
@@ -690,10 +690,98 @@ def kniha_jizd():
             radky.append({"rok": t.rok, "mesic": t.mesic, "stav": t.stav_km,
                           "ujeto": max(t.stav_km - predchozi, 0)})
             predchozi = t.stav_km
-        data.append({"v": v, "cten": radky, "posledni": predchozi})
+        tank = Tankovani.query.filter_by(vozidlo_id=v.id).order_by(Tankovani.datum.desc()).limit(30).all()
+        data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank})
+    nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
-                           akt_rok=now.year, akt_mesic=now.month)
+                           akt_rok=now.year, akt_mesic=now.month, nezarazene=nezarazene,
+                           vozidla_sel=[[v.id, v.spz] for v in vozidla])
+
+
+def _vozidlo_dle_spz(spz):
+    from ..models import Vozidlo
+    if not spz:
+        return None
+    norm = spz.replace(" ", "").upper()
+    for v in Vozidlo.query.all():
+        if (v.spz or "").replace(" ", "").upper() == norm:
+            return v.id
+    return None
+
+
+@bp.route("/kniha-jizd/ccs-import", methods=["POST"])
+@zakazky_required
+def kniha_ccs_import():
+    soubor = request.files.get("soubor")
+    if not soubor or not soubor.filename:
+        return jsonify({"radky": [], "chyba": "Nevybral jsi soubor."})
+    vysledek = ai_service.nacti_ccs_fakturu(soubor.read())
+    for r in vysledek.get("radky", []):
+        r["vozidlo_id"] = _vozidlo_dle_spz(r.get("spz"))
+        r["zdroj"] = "ccs"
+    return jsonify(vysledek)
+
+
+@bp.route("/kniha-jizd/tankovani-uloz", methods=["POST"])
+@zakazky_required
+def kniha_tankovani_uloz():
+    from ..models import Tankovani
+    radky = (request.get_json(silent=True) or {}).get("radky", [])
+    ulozeno = 0
+    for r in radky:
+        d = None
+        try:
+            d = datetime.strptime((r.get("datum") or "")[:10], "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+        def _f(v):
+            try:
+                return float(str(v).replace(",", ".")) if v not in (None, "") else None
+            except (ValueError, TypeError):
+                return None
+        db.session.add(Tankovani(vozidlo_id=r.get("vozidlo_id") or None, spz_raw=(r.get("spz") or "")[:30],
+                                 datum=d, misto=(r.get("misto") or "")[:300], litry=_f(r.get("litry")),
+                                 castka=_f(r.get("castka")), zdroj=r.get("zdroj") or "ccs"))
+        ulozeno += 1
+    db.session.commit()
+    return jsonify({"ulozeno": ulozeno})
+
+
+@bp.route("/kniha-jizd/tankovani-rucni", methods=["POST"])
+@zakazky_required
+def kniha_tankovani_rucni():
+    from ..models import Tankovani
+    try:
+        d = datetime.strptime(request.form.get("datum", ""), "%Y-%m-%d").date()
+    except ValueError:
+        flash("Vyplň platné datum.", "error")
+        return redirect(url_for("main.kniha_jizd"))
+
+    def _f(v):
+        try:
+            return float(str(v).replace(",", ".").replace(" ", "")) if v else None
+        except ValueError:
+            return None
+    db.session.add(Tankovani(vozidlo_id=request.form.get("vozidlo_id") or None,
+                             datum=d, misto=request.form.get("misto", "").strip(),
+                             litry=_f(request.form.get("litry")), castka=_f(request.form.get("castka")),
+                             zdroj="karta"))
+    db.session.commit()
+    flash("Tankování přidáno.", "info")
+    return redirect(url_for("main.kniha_jizd"))
+
+
+@bp.route("/kniha-jizd/tankovani/<int:id>/smazat", methods=["POST"])
+@zakazky_required
+def kniha_tankovani_smazat(id):
+    from ..models import Tankovani
+    t = Tankovani.query.get_or_404(id)
+    db.session.delete(t)
+    db.session.commit()
+    flash("Tankování smazáno.", "info")
+    return redirect(url_for("main.kniha_jizd"))
 
 
 @bp.route("/kniha-jizd/vozidlo/novy", methods=["POST"])
