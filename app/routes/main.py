@@ -491,11 +491,12 @@ def interni():
 @bp.route("/pm")
 @finance_required
 def pm_prehled():
-    """Přehled podle projektových manažerů — kdo co táhne (hodiny, fakturováno, potenciál)."""
+    """PM: přehledová tabulka + dynamická analytika (hodiny, projekty z Clockify) v jedné stránce."""
     now = datetime.now(timezone.utc)
     snap, updated = snapshot.nacti()
     hod = snap.get("hodiny", {})
     mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
+    n = len(mesice_rok)
     f_aktivita = request.args.get("aktivita", "aktivni")
     q = _bez_internich(Zakazka.query.join(Firma))
     if f_aktivita == "aktivni":
@@ -503,55 +504,25 @@ def pm_prehled():
     elif f_aktivita == "neaktivni":
         q = q.filter(db.or_(Zakazka.aktivni.is_(False), Firma.aktivni.is_(False)))
     zakazky = q.all()
+    for z in zakazky:
+        z._pocet_mesicu = now.month
+        z._tydny = _tydny_obdobi(z, [(now.year, m) for m in range(1, now.month + 1)])
+    _napln_faktury(zakazky, mesice_rok)
+
     pm = {}
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
         z.hodiny = z.hodiny_bill
         fakt, pot, plan = _fin_mesicne(z, hod, now.month, now.year)
         key = z.efekt_pm or "— bez PM —"
-        d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0})
+        d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0,
+                                "hodiny_tot": [0] * n, "hodiny_bill": [0] * n, "trzby_sk": 0, "plan_sm": 0,
+                                "hodin_tot": 0, "zakazky": [], "klienti": set(), "zkr": set()})
         d["zakazek"] += 1
         d["hodin"] += z.hodiny_bill
         d["trzby"] += fakt
         d["potencial"] += pot
         d["plan"] += plan
-    radky = sorted(pm.values(), key=lambda x: -x["plan"])
-    for r in radky:
-        r["hodin"] = round(r["hodin"], 1)
-        r["trzby"] = round(r["trzby"])
-        r["potencial"] = round(r["potencial"])
-        r["plan"] = round(r["plan"])
-        r["naplneni"] = round(100 * r["trzby"] / r["plan"]) if r["plan"] else 0
-    graf = {"labels": [r["pm"] for r in radky],
-            "trzby": [r["trzby"] for r in radky],
-            "potencial": [r["potencial"] for r in radky]}
-    return render_template("pm.html", radky=radky, graf=graf, rok=now.year, updated=updated,
-                           f_aktivita=f_aktivita)
-
-
-@bp.route("/pm/analyza")
-@finance_required
-def pm_analyza():
-    """Dynamická analytika PM — hodiny a zakázky z Clockify, filtrovatelné přepínáním manažerů."""
-    now = datetime.now(timezone.utc)
-    snap, updated = snapshot.nacti()
-    hod = snap.get("hodiny", {})
-    mesice_rok = [f"{now.year}-{m:02d}" for m in range(1, now.month + 1)]
-    zakazky = _bez_internich(Zakazka.query.join(Firma)
-              .filter(Zakazka.aktivni.is_(True), Firma.aktivni.is_(True))).all()
-    for z in zakazky:
-        _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
-        z.hodiny = z.hodiny_bill
-        z._pocet_mesicu = now.month
-        z._tydny = _tydny_obdobi(z, [(now.year, m) for m in range(1, now.month + 1)])
-    _napln_faktury(zakazky, mesice_rok)
-    n = len(mesice_rok)
-    pm = {}
-    for z in zakazky:
-        key = z.efekt_pm or "— bez PM —"
-        d = pm.setdefault(key, {"hodiny_tot": [0] * n, "hodiny_bill": [0] * n,
-                                "trzby": 0, "plan": 0, "hodin_bill": 0, "hodin_tot": 0,
-                                "zakazky": [], "klienti": set()})
         ztot = zbill = 0
         for i, mm in enumerate(mesice_rok):
             t, b = hod.get(z.zkratka, {}).get(mm, [0, 0])
@@ -559,26 +530,35 @@ def pm_analyza():
             d["hodiny_bill"][i] += b
             ztot += t
             zbill += b
-        d["hodin_bill"] += zbill
         d["hodin_tot"] += ztot
-        d["trzby"] += z.trzba_skutecnost
-        d["plan"] += z.trzba_plan
+        d["trzby_sk"] += z.trzba_skutecnost
+        d["plan_sm"] += z.trzba_plan
         d["zakazky"].append({"nazev": z.nazev, "klient": z.firma.nazev,
                              "tot": round(ztot, 1), "bill": round(zbill, 1), "trzba": round(z.trzba_skutecnost)})
         d["klienti"].add(z.firma_id)
-        d.setdefault("zkr", set()).add(z.zkratka)
+        d["zkr"].add(z.zkratka)
+
+    radky = sorted(pm.values(), key=lambda x: -x["plan"])
+    for r in radky:
+        r["hodin"] = round(r["hodin"], 1)
+        r["trzby"] = round(r["trzby"])
+        r["potencial"] = round(r["potencial"])
+        r["plan"] = round(r["plan"])
+        r["naplneni"] = round(100 * r["trzby"] / r["plan"]) if r["plan"] else 0
+
     pmdata = {}
     for k, d in pm.items():
-        projekty = snapshot.projekty_zkr(snap, d.get("zkr", set()))  # {projekt:[tot,bill]}
+        projekty = snapshot.projekty_zkr(snap, d["zkr"])
         pmdata[k] = {"hodiny_tot": [round(x, 1) for x in d["hodiny_tot"]],
                      "hodiny_bill": [round(x, 1) for x in d["hodiny_bill"]],
-                     "trzby": round(d["trzby"]), "plan": round(d["plan"]),
-                     "hodin_bill": round(d["hodin_bill"], 1), "hodin_tot": round(d["hodin_tot"], 1),
+                     "trzby": round(d["trzby_sk"]), "plan": round(d["plan_sm"]),
+                     "hodin_bill": round(d["hodin"], 1), "hodin_tot": round(d["hodin_tot"], 1),
                      "klientu": len(d["klienti"]),
-                     "projekty": {n: v[0] for n, v in sorted(projekty.items(), key=lambda x: -x[1][0])},
+                     "projekty": {nm: v[0] for nm, v in sorted(projekty.items(), key=lambda x: -x[1][0])},
                      "zakazky": sorted(d["zakazky"], key=lambda x: -x["bill"])}
-    labels = [MESICE_CZ[int(mm[5:7])][:3] for mm in mesice_rok]
-    return render_template("pm_analyza.html", pmdata=pmdata, labels=labels, updated=updated, rok=now.year)
+    labely = [MESICE_CZ[m][:3] for m in range(1, now.month + 1)]
+    return render_template("pm.html", radky=radky, rok=now.year, updated=updated,
+                           f_aktivita=f_aktivita, pmdata=pmdata, labely=labely)
 
 
 @bp.route("/pm/<path:jmeno>")
