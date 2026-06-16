@@ -691,7 +691,16 @@ def kniha_jizd():
                           "ujeto": max(t.stav_km - predchozi, 0)})
             predchozi = t.stav_km
         tank = Tankovani.query.filter_by(vozidlo_id=v.id).order_by(Tankovani.datum.desc()).limit(30).all()
-        data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank})
+        # hlídání servisu dle nájezdu
+        next_servis = km_do = servis_stav = None
+        if v.servis_interval_km and v.posledni_servis_km is not None:
+            next_servis = v.posledni_servis_km + v.servis_interval_km
+            km_do = next_servis - predchozi
+            servis_stav = "po" if km_do <= 0 else ("blizko" if km_do <= 1000 else "ok")
+        stk_dni = (v.stk_do - date.today()).days if v.stk_do else None
+        data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank,
+                     "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
+                     "stk_dni": stk_dni})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
@@ -726,27 +735,38 @@ def kniha_ccs_import():
 @bp.route("/kniha-jizd/tankovani-uloz", methods=["POST"])
 @zakazky_required
 def kniha_tankovani_uloz():
-    from ..models import Tankovani
+    from ..models import Tankovani, Vozidlo
     radky = (request.get_json(silent=True) or {}).get("radky", [])
-    ulozeno = 0
+    ulozeno, vytvoreno_voz = 0, 0
+
+    def _f(v):
+        try:
+            return float(str(v).replace(",", ".")) if v not in (None, "") else None
+        except (ValueError, TypeError):
+            return None
     for r in radky:
         d = None
         try:
             d = datetime.strptime((r.get("datum") or "")[:10], "%Y-%m-%d").date()
         except ValueError:
             pass
-
-        def _f(v):
-            try:
-                return float(str(v).replace(",", ".")) if v not in (None, "") else None
-            except (ValueError, TypeError):
-                return None
-        db.session.add(Tankovani(vozidlo_id=r.get("vozidlo_id") or None, spz_raw=(r.get("spz") or "")[:30],
-                                 datum=d, misto=(r.get("misto") or "")[:300], litry=_f(r.get("litry")),
+        vid = r.get("vozidlo_id") or None
+        spz = (r.get("spz") or "").strip().upper()
+        # SPZ z faktury, která není v DB → založ návrh vozidla a připoj
+        if not vid and spz and spz not in ("", "— NEZAŘAZENO —"):
+            vid = _vozidlo_dle_spz(spz)
+            if not vid:
+                nove = Vozidlo(spz=spz, model="(z faktury CCS)", palivo="nafta", aktivni=True)
+                db.session.add(nove)
+                db.session.flush()
+                vid = nove.id
+                vytvoreno_voz += 1
+        db.session.add(Tankovani(vozidlo_id=vid, spz_raw=spz[:30], datum=d,
+                                 misto=(r.get("misto") or "")[:300], litry=_f(r.get("litry")),
                                  castka=_f(r.get("castka")), zdroj=r.get("zdroj") or "ccs"))
         ulozeno += 1
     db.session.commit()
-    return jsonify({"ulozeno": ulozeno})
+    return jsonify({"ulozeno": ulozeno, "vytvoreno_voz": vytvoreno_voz})
 
 
 @bp.route("/kniha-jizd/tankovani-rucni", methods=["POST"])
@@ -823,10 +843,29 @@ def vozidlo_upravit(id):
         v.spotreba = float(request.form.get("spotreba", "").replace(",", ".")) if request.form.get("spotreba") else None
     except ValueError:
         pass
+    def _int(pole):
+        val = (request.form.get(pole, "") or "").replace(" ", "")
+        try:
+            return int(val) if val else None
+        except ValueError:
+            return None
+
+    def _date(pole):
+        val = request.form.get(pole, "").strip()
+        try:
+            return datetime.strptime(val, "%Y-%m-%d").date() if val else None
+        except ValueError:
+            return None
     try:
         v.tachometr_pocatek = int(request.form.get("tachometr_pocatek", "") or v.tachometr_pocatek or 0)
     except ValueError:
         pass
+    v.vin = request.form.get("vin", "").strip() or None
+    v.rok_vyroby = _int("rok_vyroby")
+    v.servis_interval_km = _int("servis_interval_km")
+    v.posledni_servis_km = _int("posledni_servis_km")
+    v.posledni_servis_datum = _date("posledni_servis_datum")
+    v.stk_do = _date("stk_do")
     v.aktivni = bool(request.form.get("aktivni"))
     db.session.commit()
     flash("Vozidlo uloženo.", "info")

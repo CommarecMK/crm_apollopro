@@ -131,6 +131,11 @@ def _inline_migrace():
             "klient_dokument": {
                 "soubor_zmeneno": "VARCHAR(40)",
             },
+            "vozidlo": {
+                "vin": "VARCHAR(40)", "rok_vyroby": "INTEGER",
+                "servis_interval_km": "INTEGER", "posledni_servis_km": "INTEGER",
+                "posledni_servis_datum": "DATE", "stk_do": "DATE",
+            },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",
                 "projektovy_manazer": "VARCHAR(120)",

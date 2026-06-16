@@ -118,6 +118,13 @@ class Vozidlo(db.Model):
     tachometr_pocatek = db.Column(db.Integer, default=0)     # stav km na začátku evidence
     domovska_adresa   = db.Column(db.String(300))
     aktivni   = db.Column(db.Boolean, default=True)
+    # Info o vozidle + hlídání servisu
+    vin            = db.Column(db.String(40))
+    rok_vyroby     = db.Column(db.Integer)
+    servis_interval_km    = db.Column(db.Integer)   # interval servisu v km (např. 15000)
+    posledni_servis_km    = db.Column(db.Integer)   # stav tachometru při posledním servisu
+    posledni_servis_datum = db.Column(db.Date)
+    stk_do         = db.Column(db.Date)             # platnost STK
     tachometry = db.relationship("TachometrStav", backref="vozidlo", lazy=True,
                                  cascade="all, delete-orphan")
 
