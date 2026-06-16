@@ -509,6 +509,17 @@ def pm_prehled():
         z._tydny = _tydny_obdobi(z, [(now.year, m) for m in range(1, now.month + 1)])
     _napln_faktury(zakazky, mesice_rok)
 
+    def _mesic_smlouva(z):
+        """Smluvní hodiny za MĚSÍC. Měsíční rozpočet: týden×4.33; projektový/analýza: budget/doba."""
+        if z.typ_rozpoctu == "mesicni":
+            return (z.rozpocet_hodin_tyden or 0) * 4.33
+        h = z.rozpocet_hodin_efekt or 0
+        if not h:
+            return 0
+        if z.datum_od and z.datum_do:
+            return h / max(_mesicu_mezi(z.datum_od, z.datum_do), 1)
+        return h / max(z._pocet_mesicu, 1)
+
     pm = {}
     for z in zakazky:
         _, z.hodiny_bill = snapshot.hodiny_pro_zakazku(snap, z, mesice_rok)
@@ -517,9 +528,11 @@ def pm_prehled():
         key = z.efekt_pm or "— bez PM —"
         d = pm.setdefault(key, {"pm": key, "zakazek": 0, "hodin": 0, "trzby": 0, "potencial": 0, "plan": 0,
                                 "hodiny_tot": [0] * n, "hodiny_bill": [0] * n, "trzby_sk": 0, "plan_sm": 0,
-                                "hodin_tot": 0, "zakazky": [], "klienti": set(), "zkr": set()})
+                                "hodin_tot": 0, "hodin_smlouva": 0, "projektu": 0,
+                                "zakazky": [], "klienti": set(), "zkr": set()})
         d["zakazek"] += 1
         d["hodin"] += z.hodiny_bill
+        d["hodin_smlouva"] += _mesic_smlouva(z)
         d["trzby"] += fakt
         d["potencial"] += pot
         d["plan"] += plan
@@ -545,10 +558,12 @@ def pm_prehled():
         r["potencial"] = round(r["potencial"])
         r["plan"] = round(r["plan"])
         r["naplneni"] = round(100 * r["trzby"] / r["plan"]) if r["plan"] else 0
+        r["hodin_smlouva"] = round(r["hodin_smlouva"])
 
     pmdata = {}
     for k, d in pm.items():
         projekty = snapshot.projekty_zkr(snap, d["zkr"])
+        d["projektu"] = len(projekty)
         pmdata[k] = {"hodiny_tot": [round(x, 1) for x in d["hodiny_tot"]],
                      "hodiny_bill": [round(x, 1) for x in d["hodiny_bill"]],
                      "trzby": round(d["trzby_sk"]), "plan": round(d["plan_sm"]),
