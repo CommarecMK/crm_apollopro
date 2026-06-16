@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Projektoví manažeři</h1>
+<div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+  <h1 style="color:var(--navy);font-size:30px;margin:0">Projektoví manažeři</h1>
+  <a class="btn" href="{{ url_for('main.pm_analyza') }}">📊 Dynamická analytika PM</a>
+</div>
 <p class="muted" style="margin-bottom:18px">Kdo a jak pracuje · rok {{ rok }}
   {% if updated %}· data k {{ updated[:16]|replace("T"," ") }}{% endif %}</p>
 

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+  <h1 style="color:var(--navy);font-size:30px;margin:0">PM analytika</h1>
+  <a class="logout" href="{{ url_for('main.pm_prehled') }}" style="color:var(--cyan-dark)">← Přehled PM</a>
+</div>
+<p class="muted" style="margin-bottom:14px">Naklikej manažery — hodiny i zakázky z Clockify se překreslí. Rok {{ rok }}{% if updated %} · data {{ updated[:10] }}{% endif %}.</p>
+
+<div id="pmBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px"></div>
+
+<div class="stats" style="margin-bottom:18px">
+  <div class="stat"><div class="num" id="kHodTot">0</div><div class="lbl">Hodin celkem</div></div>
+  <div class="stat"><div class="num" id="kHod" style="color:var(--green)">0</div><div class="lbl">Fakturovatelné (placené)</div></div>
+  <div class="stat"><div class="num" id="kHodNon" style="color:var(--orange)">0</div><div class="lbl">Nefakturovatelné</div></div>
+  <div class="stat"><div class="num" id="kTrzby">0</div><div class="lbl">Tržby Kč</div></div>
+  <div class="stat"><div class="num" id="kPlan">0</div><div class="lbl">Plán Kč</div></div>
+  <div class="stat"><div class="num" id="kNapln">0 %</div><div class="lbl">Naplnění</div></div>
+  <div class="stat"><div class="num" id="kZak">0</div><div class="lbl">Zakázek</div></div>
+</div>
+
+<div class="cols11">
+  <div class="stat"><h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Fakturovatelné hodiny po měsících</h3>
+    <canvas id="grafHodiny" height="150"></canvas></div>
+  <div class="stat"><h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Hodiny po zakázkách</h3>
+    <canvas id="grafZakazky" height="150"></canvas></div>
+</div>
+
+<div class="stat" style="margin-bottom:18px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:10px">Hodiny po projektech z Clockify (vybraní PM)</h3>
+  <canvas id="grafProjekty" height="110"></canvas>
+</div>
+
+<h2 style="color:var(--navy);font-size:18px;margin:22px 0 10px">Zakázky vybraných PM</h2>
+<div class="tabulka">
+<table>
+  <thead><tr><th>Zakázka</th><th>Klient</th><th>PM</th><th style="text-align:right">Hodin celkem</th><th style="text-align:right">Fakturovatelné</th><th style="text-align:right">Tržba Kč</th></tr></thead>
+  <tbody id="tabZak"></tbody>
+</table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+(function(){
+  const PM={{ pmdata|tojson }}, LABELS={{ labels|tojson }};
+  const PALETA=['#173767','#00AFF0','#34C759','#FF8D28','#FF383C','#0088FF','#FFCC00','#008ABD','#2F4B77','#7E57C2'];
+  const jmena=Object.keys(PM);
+  const barva={}; jmena.forEach((j,i)=>barva[j]=PALETA[i%PALETA.length]);
+  const vybrane=new Set(jmena);
+  const fmt=n=>(Math.round(n)).toLocaleString('cs-CZ');
+
+  const btns=document.getElementById('pmBtns');
+  jmena.forEach(j=>{
+    const b=document.createElement('button'); b.type='button'; b.dataset.pm=j; b.textContent=j+' ('+PM[j].zakazky.length+')';
+    b.style.cssText='border:2px solid '+barva[j]+';background:'+barva[j]+';color:#fff;border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600';
+    b.addEventListener('click',()=>{ if(vybrane.has(j)){vybrane.delete(j);b.style.background='#fff';b.style.color=barva[j];}else{vybrane.add(j);b.style.background=barva[j];b.style.color='#fff';} prepocti(); });
+    btns.appendChild(b);
+  });
+
+  let chH=null, chZ=null, chP=null;
+  function prepocti(){
+    const sel=jmena.filter(j=>vybrane.has(j));
+    // KPI
+    let hod=0,tot=0,trzby=0,plan=0,zak=0;
+    sel.forEach(j=>{hod+=PM[j].hodin_bill;tot+=PM[j].hodin_tot;trzby+=PM[j].trzby;plan+=PM[j].plan;zak+=PM[j].zakazky.length;});
+    document.getElementById('kHodTot').textContent=fmt(tot);
+    document.getElementById('kHod').textContent=fmt(hod);
+    document.getElementById('kHodNon').textContent=fmt(Math.max(tot-hod,0));
+    document.getElementById('kTrzby').textContent=fmt(trzby);
+    document.getElementById('kPlan').textContent=fmt(plan);
+    document.getElementById('kNapln').textContent=(plan?Math.round(100*trzby/plan):0)+' %';
+    document.getElementById('kZak').textContent=zak;
+    // Graf hodiny (čára na PM)
+    const ds=sel.map(j=>({label:j,data:PM[j].hodiny_bill,borderColor:barva[j],backgroundColor:barva[j],tension:.3,fill:false}));
+    if(chH) chH.destroy();
+    chH=new Chart(document.getElementById('grafHodiny'),{type:'line',data:{labels:LABELS,datasets:ds},
+      options:{responsive:true,plugins:{legend:{display:sel.length>1,position:'bottom'}},scales:{y:{beginAtZero:true}}}});
+    // Graf zakázky (sloupce, top 15 dle bill)
+    let zk=[]; sel.forEach(j=>PM[j].zakazky.forEach(z=>zk.push({...z,pm:j})));
+    zk.sort((a,b)=>b.bill-a.bill); zk=zk.slice(0,15);
+    if(chZ) chZ.destroy();
+    chZ=new Chart(document.getElementById('grafZakazky'),{type:'bar',
+      data:{labels:zk.map(z=>z.nazev),datasets:[{label:'Fakturovatelné h',data:zk.map(z=>z.bill),backgroundColor:zk.map(z=>barva[z.pm])}]},
+      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
+    // Graf projekty z Clockify (sečteno přes vybrané PM)
+    const proj={}; sel.forEach(j=>{const p=PM[j].projekty||{}; for(const k in p){proj[k]=(proj[k]||0)+p[k];}});
+    let pe=Object.entries(proj).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    if(chP) chP.destroy();
+    chP=new Chart(document.getElementById('grafProjekty'),{type:'bar',
+      data:{labels:pe.map(x=>x[0]),datasets:[{label:'Hodiny',data:pe.map(x=>Math.round(x[1]*10)/10),backgroundColor:'#00AFF0'}]},
+      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
+    // Tabulka
+    let radky=[]; sel.forEach(j=>PM[j].zakazky.forEach(z=>radky.push({...z,pm:j})));
+    radky.sort((a,b)=>b.bill-a.bill);
+    document.getElementById('tabZak').innerHTML=radky.map(z=>
+      '<tr><td>'+z.nazev+'</td><td>'+z.klient+'</td><td>'+z.pm+'</td><td style="text-align:right">'+z.tot+'</td><td style="text-align:right">'+z.bill+'</td><td style="text-align:right">'+fmt(z.trzba)+'</td></tr>').join('')
+      || '<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">Vyber alespoň jednoho manažera.</td></tr>';
+  }
+  prepocti();
+})();
+</script>
+{% endblock %}

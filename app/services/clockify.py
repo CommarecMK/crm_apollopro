@@ -316,6 +316,47 @@ def uzivatele_vsech_klientu(datum_od, datum_do):
         return {}
 
 
+def projekty_vsech_klientu(datum_od, datum_do):
+    """Jedním dotazem (CLIENT→PROJECT) vrátí hodiny po projektech pro VŠECHNY klienty.
+    Vrací {zkratka: [(projekt, celkem, bill)]}."""
+    if not je_nakonfigurovano():
+        return {}
+    try:
+        ws = _workspace_id()
+        id2zkr = {k.get("id"): (k.get("note") or "").strip()
+                  for k in _seznam(ws, "clients") if (k.get("note") or "").strip()}
+
+        def _vnoreno(billable=None):
+            body = {"dateRangeStart": datum_od, "dateRangeEnd": datum_do,
+                    "summaryFilter": {"groups": ["CLIENT", "PROJECT"]}}
+            if billable is not None:
+                body["billable"] = billable
+            r = requests.post(f"{REPORTS}/workspaces/{ws}/reports/summary",
+                              headers=_headers(), json=body, timeout=TIMEOUT)
+            r.raise_for_status()
+            out = {}
+            for g in r.json().get("groupOne", []):
+                cid = g.get("_id")
+                for ch in g.get("children", []):
+                    out[(cid, ch.get("_id"))] = (ch.get("name", ""),
+                                                 round((ch.get("duration") or 0) / 3600.0, 1))
+            return out
+
+        tot, bil = _vnoreno(), _vnoreno(True)
+        per = {}
+        for (cid, pid), (nm, h) in tot.items():
+            zkr = id2zkr.get(cid)
+            if not zkr:
+                continue
+            per.setdefault(zkr, []).append((nm, h, bil.get((cid, pid), ("", 0))[1]))
+        for zkr in per:
+            per[zkr] = sorted(per[zkr], key=lambda x: -x[1])
+        return per
+    except Exception as e:
+        print(f"[clockify] projekty_vsech: {e}")
+        return {}
+
+
 def hodiny_uzivatele_firma(zkratky, datum_od, datum_do):
     """Hodiny po zaměstnancích za CELÉHO klienta (více zakázek/zkratek)."""
     if not je_nakonfigurovano() or not zkratky:

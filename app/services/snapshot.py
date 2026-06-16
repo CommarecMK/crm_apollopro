@@ -72,8 +72,10 @@ def obnov():
         uzivatele = clockify.uzivatele_vsech_klientu(od_rok, do_ted)
 
         posledni = clockify.posledni_aktivita()
+        projekty = clockify.projekty_vsech_klientu(od_rok, do_ted)
         data = {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "mesice": labels, "hodiny": hodiny, "uzivatele": uzivatele, "posledni": posledni}
+                "mesice": labels, "hodiny": hodiny, "uzivatele": uzivatele,
+                "projekty": projekty, "posledni": posledni}
 
         snap = Snapshot.query.first() or Snapshot()
         snap.updated = data["updated"]
@@ -113,6 +115,18 @@ def hodiny_pro_zakazku(snap, z, mesice_period):
         od_key = z.datum_od.strftime("%Y-%m") if z.datum_od else None
         return _sum_od(snap, z.zkratka, od_key)
     return hodiny_zkr(snap, z.zkratka, mesice_period)
+
+
+def projekty_zkr(snap, zkratky):
+    """Sloučí hodiny po Clockify projektech přes více zakázek → {projekt: [celkem, bill]}."""
+    agg = {}
+    pr = snap.get("projekty") or {}
+    for zkr in zkratky:
+        for nazev, celkem, bill in pr.get(zkr, []):
+            a = agg.setdefault(nazev, [0, 0])
+            a[0] += celkem
+            a[1] += bill
+    return {n: [round(v[0], 1), round(v[1], 1)] for n, v in agg.items()}
 
 
 def uzivatele_zkr(snap, zkratky):
