@@ -148,11 +148,14 @@ def nacti_ccs_fakturu(pdf_bytes):
     if not ma_ai():
         return {"radky": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
     from . import extrakce
-    system = ("Z přiložené faktury CCS (palivové karty) vytáhni JEDNOTLIVÁ tankování/transakce. "
+    system = ("Z přiložené faktury CCS (palivové karty) vytáhni JEDNOTLIVÉ transakce. "
               "Vrať POUZE JSON pole objektů: "
-              '[{"datum":"YYYY-MM-DD","spz":"SPZ vozidla","misto":"adresa nebo město čerpací stanice",'
-              '"litry":číslo_litrů,"castka":částka_v_Kč}]. '
-              "Bez dalšího textu. Částky a litry jako čísla (tečka desetinná). Když údaj chybí, dej null.")
+              '[{"datum":"YYYY-MM-DD","spz":"SPZ vozidla nebo číslo karty","misto":"adresa/město stanice",'
+              '"litry":číslo_litrů,"castka":částka_v_Kč,"druh":"typ položky",'
+              '"kategorie":"phm nebo ostatni"}]. '
+              "Pole 'druh' = typ pohonné hmoty (Nafta, Natural 95, Adblue…) NEBO název položky (Mýto, Mytí, Poplatek…). "
+              "Pole 'kategorie' = 'phm' jen u pohonných hmot (nafta/benzin/CNG/LPG); vše ostatní (mýto, AdBlue, mytí, poplatky) = 'ostatni'. "
+              "Bez dalšího textu. Částky/litry jako čísla (tečka desetinná). Co chybí, dej null.")
     text = extrakce.extrahuj_text(pdf_bytes, "ccs.pdf") or ""
     if len(text.strip()) > 200:
         odp, chyba = _claude(system, "Text faktury CCS:\n" + text[:20000], max_tokens=4000)
@@ -172,9 +175,12 @@ def nacti_ccs_fakturu(pdf_bytes):
                 return round(float(str(v).replace(",", ".").replace(" ", "")), 2)
             except (ValueError, TypeError):
                 return None
+        kat = str(r.get("kategorie") or "").strip().lower()
+        kat = "ostatni" if kat.startswith("ostat") else "phm"
         radky.append({"datum": (r.get("datum") or "")[:10], "spz": str(r.get("spz") or "").strip().upper(),
                       "misto": str(r.get("misto") or "").strip()[:300],
-                      "litry": _f(r.get("litry")), "castka": _f(r.get("castka"))})
+                      "litry": _f(r.get("litry")), "castka": _f(r.get("castka")),
+                      "druh": str(r.get("druh") or "").strip()[:60], "kategorie": kat})
     return {"radky": radky, "chyba": None}
 
 

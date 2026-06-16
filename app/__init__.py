@@ -136,6 +136,9 @@ def _inline_migrace():
                 "servis_interval_km": "INTEGER", "posledni_servis_km": "INTEGER",
                 "posledni_servis_datum": "DATE", "stk_do": "DATE",
             },
+            "tankovani": {
+                "druh": "VARCHAR(60)", "kategorie": "VARCHAR(20) DEFAULT 'phm'",
+            },
             "zakazka": {
                 "aktivni": "BOOLEAN DEFAULT TRUE",
                 "projektovy_manazer": "VARCHAR(120)",

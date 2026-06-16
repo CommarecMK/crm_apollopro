@@ -768,9 +768,11 @@ def kniha_tankovani_uloz():
                 db.session.flush()
                 vid = nove.id
                 vytvoreno_voz += 1
+        kat = "ostatni" if str(r.get("kategorie") or "").startswith("ostat") else "phm"
         db.session.add(Tankovani(vozidlo_id=vid, spz_raw=spz[:30], datum=d,
                                  misto=(r.get("misto") or "")[:300], litry=litry_v,
-                                 castka=castka_v, zdroj=r.get("zdroj") or "ccs"))
+                                 castka=castka_v, druh=(r.get("druh") or "")[:60], kategorie=kat,
+                                 zdroj=r.get("zdroj") or "ccs"))
         ulozeno += 1
     db.session.commit()
     return jsonify({"ulozeno": ulozeno, "vytvoreno_voz": vytvoreno_voz, "preskoceno": preskoceno})
@@ -805,8 +807,10 @@ def kniha_tankovani_rucni():
             return float(str(v).replace(",", ".").replace(" ", "")) if v else None
         except ValueError:
             return None
+    kat = "ostatni" if request.form.get("kategorie", "").startswith("ostat") else "phm"
     db.session.add(Tankovani(vozidlo_id=request.form.get("vozidlo_id") or None,
                              datum=d, misto=request.form.get("misto", "").strip(),
+                             druh=request.form.get("druh", "").strip()[:60], kategorie=kat,
                              litry=_f(request.form.get("litry")), castka=_f(request.form.get("castka")),
                              zdroj="karta"))
     db.session.commit()

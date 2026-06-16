@@ -28,7 +28,7 @@
       <button type="button" id="ccsZavri" style="border:none;background:none;font-size:24px;cursor:pointer;color:#889">×</button>
     </div>
     <div class="tabulka"><table>
-      <thead><tr><th></th><th>Datum</th><th>Vozidlo</th><th>Místo</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th></tr></thead>
+      <thead><tr><th></th><th>Datum</th><th>Vozidlo</th><th>Místo</th><th>Druh</th><th>Kategorie</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th></tr></thead>
       <tbody id="ccsRadky"></tbody>
     </table></div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
@@ -61,6 +61,8 @@
         +'<td><input class="t-datum" value="'+esc(x.datum)+'" style="'+istyl+';width:110px"></td>'
         +'<td><select class="t-voz" style="'+istyl+'">'+optVoz(x.vozidlo_id)+'</select><div class="muted" style="font-size:10px">'+esc(x.spz||'')+'</div></td>'
         +'<td><input class="t-misto" value="'+esc(x.misto)+'" style="'+istyl+';width:100%"></td>'
+        +'<td><input class="t-druh" value="'+esc(x.druh||'')+'" style="'+istyl+';width:90px"></td>'
+        +'<td><select class="t-kat" style="'+istyl+'"><option value="phm"'+(x.kategorie!=='ostatni'?' selected':'')+'>PHM</option><option value="ostatni"'+(x.kategorie==='ostatni'?' selected':'')+'>Ostatní</option></select></td>'
         +'<td style="text-align:right"><input class="t-litry" value="'+esc(x.litry)+'" style="'+istyl+';width:70px;text-align:right"></td>'
         +'<td style="text-align:right"><input class="t-castka" value="'+esc(x.castka)+'" style="'+istyl+';width:80px;text-align:right"></td></tr>').join('');
       vysl.textContent=''; modal.style.display='flex';
@@ -73,6 +75,7 @@
       if(!tr.querySelector('.t-ch').checked) return;
       radky.push({datum:tr.querySelector('.t-datum').value,vozidlo_id:tr.querySelector('.t-voz').value||null,
         spz:tr.dataset.spz||'',misto:tr.querySelector('.t-misto').value,
+        druh:tr.querySelector('.t-druh').value,kategorie:tr.querySelector('.t-kat').value,
         litry:tr.querySelector('.t-litry').value,castka:tr.querySelector('.t-castka').value,zdroj:'ccs'});
     });
     if(!radky.length){vysl.textContent='Nic vybráno.';return;}
@@ -137,10 +140,11 @@
   {% if d.tankovani %}
   <div class="tabulka" style="margin-top:10px">
   <table>
-    <thead><tr><th>Tankování — datum</th><th>Místo</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th>Zdroj</th><th></th></tr></thead>
+    <thead><tr><th>Tankování — datum</th><th>Místo</th><th>Druh</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th>Zdroj</th><th></th></tr></thead>
     <tbody>
       {% for t in d.tankovani %}
-      <tr><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.misto or '—' }}</td>
+      <tr{{ ' style=opacity:.6' if t.kategorie=='ostatni' }}><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.misto or '—' }}</td>
+        <td>{{ t.druh or '—' }}{% if t.kategorie=='ostatni' %} <span class="tag" style="background:#eef0f4;color:#667">ostatní</span>{% endif %}</td>
         <td style="text-align:right">{{ t.litry or '' }}</td><td style="text-align:right">{{ "{:,.0f}".format(t.castka).replace(",", " ") if t.castka else '' }}</td>
         <td>{% if t.zdroj=='karta' %}<span class="tag" style="background:#fff0e6;color:var(--orange)">karta</span>{% else %}<span class="tag">CCS</span>{% endif %}</td>
         <td style="text-align:right"><form method="post" action="{{ url_for('main.kniha_tankovani_smazat', id=t.id) }}" onsubmit="return confirm('Smazat tankování?')" style="display:inline">
@@ -158,9 +162,11 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="vozidlo_id" value="{{ d.v.id }}">
       <input type="date" name="datum" required style="{{ istyl }}">
-      <input type="text" name="misto" placeholder="Místo / čerpací stanice" style="{{ istyl }};flex:1;min-width:180px">
-      <input type="text" name="litry" placeholder="litry" style="{{ istyl }};width:90px">
-      <input type="text" name="castka" placeholder="Kč" style="{{ istyl }};width:100px">
+      <input type="text" name="misto" placeholder="Místo / čerpací stanice" style="{{ istyl }};flex:1;min-width:160px">
+      <input type="text" name="druh" placeholder="Nafta / Natural…" style="{{ istyl }};width:120px">
+      <select name="kategorie" style="{{ istyl }}"><option value="phm">PHM</option><option value="ostatni">Ostatní</option></select>
+      <input type="text" name="litry" placeholder="litry" style="{{ istyl }};width:80px">
+      <input type="text" name="castka" placeholder="Kč" style="{{ istyl }};width:90px">
       <button class="btn btn-ghost" type="submit" style="font-size:13px">Přidat</button>
     </form>
   </details>

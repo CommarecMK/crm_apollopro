@@ -149,7 +149,9 @@ class Tankovani(db.Model):
     misto      = db.Column(db.String(300))     # adresa/město čerpací stanice
     litry      = db.Column(db.Float)
     castka     = db.Column(db.Float)
-    zdroj      = db.Column(db.String(10), default="ccs")  # ccs | karta
+    druh       = db.Column(db.String(60))                  # typ PHM (Nafta, Natural 95…) nebo název položky
+    kategorie  = db.Column(db.String(20), default="phm")   # phm | ostatni (mýto, AdBlue, mytí, poplatky…)
+    zdroj      = db.Column(db.String(10), default="ccs")   # ccs | karta
     vozidlo    = db.relationship("Vozidlo")
 
 
