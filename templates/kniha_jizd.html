@@ -7,12 +7,18 @@
 <!-- Import CCS faktury -->
 <div class="stat" style="margin-bottom:18px">
   <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Import CCS faktury (PDF)</h3>
-  <form id="ccsForm" data-noload style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="file" name="soubor" accept=".pdf" required style="font-size:13px">
-    <button class="btn" type="submit">Načíst fakturu (AI)</button>
-    <span id="ccsStav" class="muted" style="font-size:13px"></span>
-  </form>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <form id="ccsForm" data-noload style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="soubor" accept=".pdf" required style="font-size:13px">
+      <button class="btn" type="submit">Načíst fakturu (AI)</button>
+      <span id="ccsStav" class="muted" style="font-size:13px"></span>
+    </form>
+    <form method="post" action="{{ url_for('main.kniha_tankovani_smazat_vse') }}" onsubmit="return confirm('Opravdu smazat VŠECHNA tankování?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="rozsah" value="vse">
+      <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12px">Smazat všechna tankování</button>
+    </form>
+  </div>
 </div>
 
 <div id="ccsModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">

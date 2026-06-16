@@ -744,6 +744,7 @@ def kniha_tankovani_uloz():
             return float(str(v).replace(",", ".")) if v not in (None, "") else None
         except (ValueError, TypeError):
             return None
+    preskoceno = 0
     for r in radky:
         d = None
         try:
@@ -752,6 +753,12 @@ def kniha_tankovani_uloz():
             pass
         vid = r.get("vozidlo_id") or None
         spz = (r.get("spz") or "").strip().upper()
+        litry_v, castka_v = _f(r.get("litry")), _f(r.get("castka"))
+        # dedup: stejné datum+místo+litry+Kč už existuje → přeskoč (ochrana proti dvojkliku)
+        if Tankovani.query.filter_by(datum=d, misto=(r.get("misto") or "")[:300],
+                                     litry=litry_v, castka=castka_v).first():
+            preskoceno += 1
+            continue
         # SPZ z faktury, která není v DB → založ návrh vozidla a připoj
         if not vid and spz and spz not in ("", "— NEZAŘAZENO —"):
             vid = _vozidlo_dle_spz(spz)
@@ -762,11 +769,25 @@ def kniha_tankovani_uloz():
                 vid = nove.id
                 vytvoreno_voz += 1
         db.session.add(Tankovani(vozidlo_id=vid, spz_raw=spz[:30], datum=d,
-                                 misto=(r.get("misto") or "")[:300], litry=_f(r.get("litry")),
-                                 castka=_f(r.get("castka")), zdroj=r.get("zdroj") or "ccs"))
+                                 misto=(r.get("misto") or "")[:300], litry=litry_v,
+                                 castka=castka_v, zdroj=r.get("zdroj") or "ccs"))
         ulozeno += 1
     db.session.commit()
-    return jsonify({"ulozeno": ulozeno, "vytvoreno_voz": vytvoreno_voz})
+    return jsonify({"ulozeno": ulozeno, "vytvoreno_voz": vytvoreno_voz, "preskoceno": preskoceno})
+
+
+@bp.route("/kniha-jizd/tankovani-smazat-vse", methods=["POST"])
+@zakazky_required
+def kniha_tankovani_smazat_vse():
+    from ..models import Tankovani
+    rozsah = request.form.get("rozsah", "vse")
+    q = Tankovani.query
+    if rozsah == "nezarazene":
+        q = q.filter_by(vozidlo_id=None)
+    pocet = q.delete()
+    db.session.commit()
+    flash(f"Smazáno {pocet} tankování.", "info")
+    return redirect(url_for("main.kniha_jizd"))
 
 
 @bp.route("/kniha-jizd/tankovani-rucni", methods=["POST"])
