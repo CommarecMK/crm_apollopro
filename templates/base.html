@@ -154,7 +154,8 @@
         <a class="logout" href="{{ url_for('main.firmy') }}">Firmy</a>
         <a class="logout" href="{{ url_for('main.interni') }}">Interní</a>
         {% if vidi_finance() %}<a class="logout" href="{{ url_for('main.cashflow') }}">Cashflow</a>
-        <a class="logout" href="{{ url_for('main.pm_prehled') }}">PM</a>{% endif %}
+        <a class="logout" href="{{ url_for('main.pm_prehled') }}">PM</a>
+        <a class="logout" href="{{ url_for('main.kniha_jizd') }}">Kniha jízd</a>{% endif %}
       {% endif %}
       {% if je_admin() %}
         <span style="color:#3a5481">|</span>

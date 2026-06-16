@@ -676,6 +676,96 @@ def cashflow():
                            bez_terminu=bez_terminu, updated=updated)
 
 
+# ─── Kniha jízd (vozidla, tachometr) ───────────────────────────────
+@bp.route("/kniha-jizd")
+@finance_required
+def kniha_jizd():
+    from ..models import Vozidlo
+    vozidla = Vozidlo.query.order_by(Vozidlo.aktivni.desc(), Vozidlo.spz).all()
+    data = []
+    for v in vozidla:
+        cten = sorted(v.tachometry, key=lambda t: (t.rok, t.mesic))
+        radky, predchozi = [], v.tachometr_pocatek or 0
+        for t in cten:
+            radky.append({"rok": t.rok, "mesic": t.mesic, "stav": t.stav_km,
+                          "ujeto": max(t.stav_km - predchozi, 0)})
+            predchozi = t.stav_km
+        data.append({"v": v, "cten": radky, "posledni": predchozi})
+    now = datetime.now(timezone.utc)
+    return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
+                           akt_rok=now.year, akt_mesic=now.month)
+
+
+@bp.route("/kniha-jizd/vozidlo/novy", methods=["POST"])
+@zakazky_required
+def vozidlo_novy():
+    from ..models import Vozidlo
+    spz = request.form.get("spz", "").strip().upper()
+    if not spz:
+        flash("Vyplň SPZ.", "error")
+        return redirect(url_for("main.kniha_jizd"))
+    if Vozidlo.query.filter_by(spz=spz).first():
+        flash("Vozidlo s touto SPZ už existuje.", "error")
+        return redirect(url_for("main.kniha_jizd"))
+    try:
+        spotreba = float(request.form.get("spotreba", "").replace(",", ".")) if request.form.get("spotreba") else None
+    except ValueError:
+        spotreba = None
+    try:
+        tp = int(request.form.get("tachometr_pocatek", "") or 0)
+    except ValueError:
+        tp = 0
+    db.session.add(Vozidlo(spz=spz, model=request.form.get("model", "").strip(),
+                           palivo=request.form.get("palivo", "nafta"), spotreba=spotreba,
+                           tachometr_pocatek=tp, domovska_adresa=request.form.get("domovska_adresa", "").strip()))
+    db.session.commit()
+    flash("Vozidlo přidáno.", "info")
+    return redirect(url_for("main.kniha_jizd"))
+
+
+@bp.route("/kniha-jizd/vozidlo/<int:id>/upravit", methods=["POST"])
+@zakazky_required
+def vozidlo_upravit(id):
+    from ..models import Vozidlo
+    v = Vozidlo.query.get_or_404(id)
+    v.model = request.form.get("model", v.model).strip()
+    v.palivo = request.form.get("palivo", v.palivo)
+    v.domovska_adresa = request.form.get("domovska_adresa", "").strip()
+    try:
+        v.spotreba = float(request.form.get("spotreba", "").replace(",", ".")) if request.form.get("spotreba") else None
+    except ValueError:
+        pass
+    try:
+        v.tachometr_pocatek = int(request.form.get("tachometr_pocatek", "") or v.tachometr_pocatek or 0)
+    except ValueError:
+        pass
+    v.aktivni = bool(request.form.get("aktivni"))
+    db.session.commit()
+    flash("Vozidlo uloženo.", "info")
+    return redirect(url_for("main.kniha_jizd"))
+
+
+@bp.route("/kniha-jizd/vozidlo/<int:id>/tachometr", methods=["POST"])
+@zakazky_required
+def vozidlo_tachometr(id):
+    from ..models import Vozidlo, TachometrStav
+    Vozidlo.query.get_or_404(id)
+    try:
+        rok, mesic = (int(x) for x in request.form.get("obdobi", "").split("-"))
+        stav = int(request.form.get("stav_km", "").replace(" ", ""))
+    except (ValueError, TypeError):
+        flash("Vyplň platné období a stav km.", "error")
+        return redirect(url_for("main.kniha_jizd"))
+    t = TachometrStav.query.filter_by(vozidlo_id=id, rok=rok, mesic=mesic).first()
+    if t:
+        t.stav_km = stav
+    else:
+        db.session.add(TachometrStav(vozidlo_id=id, rok=rok, mesic=mesic, stav_km=stav))
+    db.session.commit()
+    flash("Stav tachometru uložen.", "info")
+    return redirect(url_for("main.kniha_jizd"))
+
+
 # ─── Operativa (klient: úkoly, dokumenty, zápisy, LOE) ─────────────
 @bp.route("/operativa")
 @login_required

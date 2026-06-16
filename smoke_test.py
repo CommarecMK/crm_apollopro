@@ -30,7 +30,7 @@ with app.app_context():
     zid = Zakazka.query.first().id
 
 CESTY = ["/", "/zakazky", "/firmy", f"/firmy/{fid}", f"/zakazka/{zid}",
-         "/interni", "/cashflow", "/pm", "/pm/— bez PM —",
+         "/interni", "/cashflow", "/pm", "/pm/— bez PM —", "/kniha-jizd",
          "/operativa", f"/operativa/{fid}", "/admin", "/admin/uzivatele",
          "/operativa/ukol/1", "/operativa/resitele", "/muj-ucet", "/operativa/dokumenty",
          "/operativa/freelo"]

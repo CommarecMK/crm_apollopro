@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block content %}
+{% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px;background:#fff" %}
+<h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Kniha jízd</h1>
+<p class="muted" style="margin-bottom:18px">Vozidla a měsíční stav tachometru. (Dále: import CCS, generování jízd, export do OneDrive.)</p>
+
+{% for d in data %}
+<div class="stat" style="margin-bottom:14px;{{ 'opacity:.65' if not d.v.aktivni }}">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+    <div>
+      <span style="font-weight:700;color:var(--navy);font-size:18px">{{ d.v.spz }}</span>
+      <span class="muted" style="margin-left:8px">{{ d.v.model or '' }}</span>
+      <div class="muted" style="font-size:12px;margin-top:3px">
+        {{ d.v.palivo }}{% if d.v.spotreba %} · {{ d.v.spotreba }} l/100 km{% endif %}
+        · poslední tachometr: <b>{{ "{:,.0f}".format(d.posledni).replace(",", " ") }}</b> km
+        {% if d.v.domovska_adresa %}· {{ d.v.domovska_adresa }}{% endif %}
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('main.vozidlo_tachometr', id=d.v.id) }}" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <select name="obdobi" style="{{ istyl }};padding:7px 9px">
+        {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val == '%04d-%02d'|format(akt_rok, akt_mesic) }}>{{ popis }}</option>{% endfor %}
+      </select>
+      <input type="text" name="stav_km" placeholder="stav km" required style="{{ istyl }};padding:7px 9px;width:110px">
+      <button class="btn" type="submit" style="padding:7px 12px;font-size:13px">Uložit tachometr</button>
+    </form>
+  </div>
+
+  {% if d.cten %}
+  <div class="tabulka" style="margin-top:10px">
+  <table>
+    <thead><tr><th>Období</th><th style="text-align:right">Stav km</th><th style="text-align:right">Ujeto (km)</th></tr></thead>
+    <tbody>
+      {% for c in d.cten|reverse %}
+      <tr><td>{{ "%02d"|format(c.mesic) }}/{{ c.rok }}</td>
+        <td style="text-align:right">{{ "{:,.0f}".format(c.stav).replace(",", " ") }}</td>
+        <td style="text-align:right;color:var(--navy);font-weight:600">{{ "{:,.0f}".format(c.ujeto).replace(",", " ") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  <details style="margin-top:10px">
+    <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">Upravit vozidlo</summary>
+    <form method="post" action="{{ url_for('main.vozidlo_upravit', id=d.v.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="model" value="{{ d.v.model or '' }}" placeholder="Model" style="{{ istyl }}">
+      <select name="palivo" style="{{ istyl }}">
+        {% for p in ['nafta','benzin','elektro','hybrid'] %}<option value="{{ p }}" {{ 'selected' if p==d.v.palivo }}>{{ p }}</option>{% endfor %}
+      </select>
+      <input type="text" name="spotreba" value="{{ d.v.spotreba or '' }}" placeholder="l/100 km" style="{{ istyl }};width:100px">
+      <input type="text" name="tachometr_pocatek" value="{{ d.v.tachometr_pocatek or '' }}" placeholder="počáteční km" style="{{ istyl }};width:120px">
+      <input type="text" name="domovska_adresa" value="{{ d.v.domovska_adresa or '' }}" placeholder="Domovská adresa" style="{{ istyl }};flex:1;min-width:200px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="aktivni" {{ 'checked' if d.v.aktivni }}> aktivní</label>
+      <button class="btn btn-ghost" type="submit" style="font-size:13px">Uložit</button>
+    </form>
+  </details>
+</div>
+{% else %}
+<p class="muted">Zatím žádná vozidla — přidej první níže.</p>
+{% endfor %}
+
+<h2 style="color:var(--navy);font-size:18px;margin:24px 0 10px">Přidat vozidlo</h2>
+<form method="post" action="{{ url_for('main.vozidlo_novy') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:#fff;padding:16px 18px;border-radius:12px;box-shadow:0 1px 3px rgba(14,33,62,.08)">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">SPZ</div><input type="text" name="spz" required placeholder="1AB 2345" style="{{ istyl }}"></div>
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Model</div><input type="text" name="model" placeholder="Škoda Octavia" style="{{ istyl }}"></div>
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Palivo</div>
+    <select name="palivo" style="{{ istyl }}">{% for p in ['nafta','benzin','elektro','hybrid'] %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select></div>
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Spotřeba l/100</div><input type="text" name="spotreba" placeholder="6,5" style="{{ istyl }};width:90px"></div>
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Počáteční km</div><input type="text" name="tachometr_pocatek" placeholder="0" style="{{ istyl }};width:110px"></div>
+  <div style="flex:1;min-width:200px"><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Domovská adresa</div><input type="text" name="domovska_adresa" placeholder="Sídlo / parkoviště" style="{{ istyl }};width:100%"></div>
+  <button class="btn" type="submit">+ Přidat</button>
+</form>
+{% endblock %}

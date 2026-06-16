@@ -107,6 +107,31 @@ class FreeloSnapshot(db.Model):
     data    = db.Column(db.Text)
 
 
+class Vozidlo(db.Model):
+    """Vozidlo pro knihu jízd."""
+    __tablename__ = "vozidlo"
+    id        = db.Column(db.Integer, primary_key=True)
+    spz       = db.Column(db.String(20), unique=True, nullable=False)
+    model     = db.Column(db.String(120))
+    palivo    = db.Column(db.String(20), default="nafta")   # nafta | benzin | elektro | hybrid
+    spotreba  = db.Column(db.Float)                          # l/100 km (průměr)
+    tachometr_pocatek = db.Column(db.Integer, default=0)     # stav km na začátku evidence
+    domovska_adresa   = db.Column(db.String(300))
+    aktivni   = db.Column(db.Boolean, default=True)
+    tachometry = db.relationship("TachometrStav", backref="vozidlo", lazy=True,
+                                 cascade="all, delete-orphan")
+
+
+class TachometrStav(db.Model):
+    """Stav tachometru vozidla ke konci měsíce."""
+    __tablename__ = "tachometr_stav"
+    id         = db.Column(db.Integer, primary_key=True)
+    vozidlo_id = db.Column(db.Integer, db.ForeignKey("vozidlo.id"), nullable=False, index=True)
+    rok        = db.Column(db.Integer, nullable=False)
+    mesic      = db.Column(db.Integer, nullable=False)
+    stav_km    = db.Column(db.Integer, nullable=False, default=0)
+
+
 class KlientDokument(db.Model):
     """Indexovaný dokument klienta z OneDrive — extrahovaný text + metadata (pro hledání a AI)."""
     __tablename__ = "klient_dokument"
