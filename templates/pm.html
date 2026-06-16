@@ -12,6 +12,10 @@
   </select>
 </form>
 
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  <button type="button" id="oznacVse" class="btn btn-ghost" style="font-size:12px;padding:6px 12px">Označit vše</button>
+  <button type="button" id="odznacVse" class="btn btn-ghost" style="font-size:12px;padding:6px 12px">Odznačit vše</button>
+</div>
 <div id="pmBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px"></div>
 
 <div class="stats" style="margin-bottom:18px">
@@ -76,13 +80,16 @@
   const barva={}; jmena.forEach((j,i)=>barva[j]=PALETA[i%PALETA.length]);
   const vybrane=new Set(jmena);
   const fmt=n=>(Math.round(n)).toLocaleString('cs-CZ');
-  const btns=document.getElementById('pmBtns');
+  const btns=document.getElementById('pmBtns'); const tlac={};
+  function stav(j){const b=tlac[j]; if(vybrane.has(j)){b.style.background=barva[j];b.style.color='#fff';}else{b.style.background='#fff';b.style.color=barva[j];}}
   jmena.forEach(j=>{
     const b=document.createElement('button'); b.type='button'; b.textContent=j+' ('+PM[j].zakazky.length+')';
     b.style.cssText='border:2px solid '+barva[j]+';background:'+barva[j]+';color:#fff;border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600';
-    b.addEventListener('click',()=>{ if(vybrane.has(j)){vybrane.delete(j);b.style.background='#fff';b.style.color=barva[j];}else{vybrane.add(j);b.style.background=barva[j];b.style.color='#fff';} prepocti(); });
-    btns.appendChild(b);
+    b.addEventListener('click',()=>{ if(vybrane.has(j)) vybrane.delete(j); else vybrane.add(j); stav(j); prepocti(); });
+    tlac[j]=b; btns.appendChild(b);
   });
+  document.getElementById('oznacVse').addEventListener('click',()=>{jmena.forEach(j=>{vybrane.add(j);stav(j);});prepocti();});
+  document.getElementById('odznacVse').addEventListener('click',()=>{jmena.forEach(j=>{vybrane.delete(j);stav(j);});prepocti();});
   let chH=null, chZ=null, chP=null;
   function prepocti(){
     const sel=jmena.filter(j=>vybrane.has(j));
