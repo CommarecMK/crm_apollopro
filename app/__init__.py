@@ -50,7 +50,7 @@ def create_app():
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
         _reset_indexace()         # po restartu uvolní zaseknuté příznaky indexace
         _seed_vozidla()           # jednorázově naplní vozový park z dat Fleet
-        _seed_historie_jizd()     # jednorázově naimportuje historii jízd 2026
+        _seed_historie_jizd()     # jednorázově naimportuje historii jízd (2024–2026)
 
     return app
 
@@ -113,8 +113,8 @@ def _seed_historie_jizd():
     import json
     from datetime import datetime
     from .models import Vozidlo, Jizda, TachometrStav, Nastaveni
-    PRIZNAK = "seed_historie_jizd_v1"
-    cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_2026.json")
+    PRIZNAK = "seed_historie_jizd_v3"
+    cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_historie.json")
     try:
         if Nastaveni.query.get(PRIZNAK) or not os.path.exists(cesta):
             return
@@ -127,9 +127,9 @@ def _seed_historie_jizd():
             if not v:
                 continue
             rok, mesic = z["rok"], z["mesic"]
-            # přeskoč, pokud už pro tento měsíc jízdy existují (neduplikuj)
-            if Jizda.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).first():
-                continue
+            # re-sync z autoritativního souboru: smaž případnou předchozí verzi tohoto měsíce
+            # (ručně generované měsíce, které v souboru nejsou, zůstanou nedotčené)
+            Jizda.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).delete()
             # počáteční tachometr auta = začátek nejstaršího importovaného měsíce
             prvni_zac = next((j["zac"] for j in z["jizdy"] if j.get("zac") is not None), None)
             if prvni_zac is not None and (not v.tachometr_pocatek or v.tachometr_pocatek == 0):
@@ -158,7 +158,7 @@ def _seed_historie_jizd():
             naimport += 1
         db.session.add(Nastaveni(klic=PRIZNAK, hodnota="hotovo"))
         db.session.commit()
-        print(f"[seed] Historie jízd 2026: naimportováno {naimport} měsíčních záznamů.")
+        print(f"[seed] Historie jízd: naimportováno {naimport} měsíčních záznamů.")
     except Exception as e:
         db.session.rollback()
         print(f"[seed] historie jízd: {e}")

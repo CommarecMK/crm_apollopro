@@ -685,6 +685,8 @@ def cashflow():
 def kniha_jizd():
     from ..models import Vozidlo, Tankovani
     vozidla = Vozidlo.query.order_by(Vozidlo.aktivni.desc(), Vozidlo.spz).all()
+    dnes = date.today()
+    akt = (dnes.year, dnes.month)
     data = []
     for v in vozidla:
         cten = sorted(v.tachometry, key=lambda t: (t.rok, t.mesic))
@@ -706,7 +708,17 @@ def kniha_jizd():
         tank_mes = {(t.datum.year, t.datum.month)
                     for t in Tankovani.query.filter_by(vozidlo_id=v.id).all()
                     if t.datum and t.kategorie != "ostatni"}
-        klice = sorted(set(km_mes) | set(stav_mes), reverse=True)
+        # klíče = měsíce s jízdami/tachometrem/tankováním + most recent gap až po aktuální měsíc
+        klice = set(km_mes) | set(stav_mes) | tank_mes | {akt}
+        if km_mes or stav_mes or tank_mes:
+            posl_k = max(klice)
+            r0, m0 = posl_k
+            while (r0, m0) < akt:               # dopň prázdné měsíce mezi poslední historií a dneškem
+                m0 += 1
+                if m0 > 12:
+                    r0, m0 = r0 + 1, 1
+                klice.add((r0, m0))
+        klice = sorted(klice, reverse=True)
         mesice_hist = [{"rok": r, "mesic": m, "km": round(km_mes.get((r, m), 0)),
                         "pocet": pocet_mes.get((r, m), 0), "stav": stav_mes.get((r, m)),
                         "ma_tank": (r, m) in tank_mes} for r, m in klice]
@@ -847,6 +859,35 @@ def kniha_generuj_jizdy(id):
     # deterministický generátor: kotvy (tankování) + reálná historie vozidla + OSM
     vysledek = jizdy_gen_service.navrhni(v, rok, mesic, cil_km, tank)
     return jsonify(vysledek)
+
+
+@bp.route("/kniha-jizd/vozidlo/<int:id>/jizdy")
+@finance_required
+def kniha_jizdy_nahled(id):
+    """Vrátí uložené jízdy vozidla za měsíc (?obdobi=YYYY-MM) jako JSON pro náhled v appce."""
+    from ..models import Vozidlo, Jizda
+    v = Vozidlo.query.get_or_404(id)
+    try:
+        rok, mesic = (int(x) for x in request.args.get("obdobi", "").split("-"))
+    except (ValueError, TypeError):
+        return jsonify({"jizdy": [], "chyba": "Neplatné období."})
+    jz = Jizda.query.filter_by(vozidlo_id=id, rok=rok, mesic=mesic).order_by(Jizda.datum, Jizda.id).all()
+    sz, _sk = _km_na_zacatku_konci(v, rok, mesic)
+    stav = sz or 0
+    out = []
+    for j in jz:
+        km = float(j.km or 0)
+        zac = stav
+        stav = stav + km
+        out.append({"datum": j.datum.strftime("%d.%m.%Y") if j.datum else "",
+                    "odkud": j.odkud or "", "kam": j.kam or "", "ucel": j.ucel or "",
+                    "zac": round(zac), "kon": round(stav), "km": round(km),
+                    "soukroma": bool(j.soukroma)})
+    return jsonify({"jizdy": out, "soucet": round(sum(j["km"] for j in out)),
+                    "stav_zac": round(sz or 0), "stav_kon": round(stav),
+                    "spz": v.spz, "model": v.model or "", "ridic": v.ridic or "",
+                    "exporturl": url_for("main.kniha_export", id=id) + f"?obdobi={rok:04d}-{mesic:02d}",
+                    "chyba": None if out else "Za tento měsíc nejsou uložené žádné jízdy."})
 
 
 @bp.route("/kniha-jizd/jizdy-uloz", methods=["POST"])

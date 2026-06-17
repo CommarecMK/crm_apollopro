@@ -174,6 +174,49 @@
 })();
 </script>
 
+<!-- Modal: náhled uložených jízd -->
+<div id="viewModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:1040px;width:100%;max-height:88vh;overflow:auto;padding:20px 22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h3 class="druk" id="vTitle" style="color:var(--navy);font-size:18px;margin:0">Jízdy</h3>
+      <button type="button" id="vZavri" style="border:none;background:none;font-size:24px;cursor:pointer;color:#889">×</button>
+    </div>
+    <p id="vInfo" class="muted" style="font-size:13px;margin:0 0 10px"></p>
+    <div class="tabulka"><table>
+      <thead><tr><th>Datum</th><th>Odkud</th><th>Kam</th><th>Účel</th><th style="text-align:right">Začátek</th><th style="text-align:right">Konec</th><th style="text-align:right">Km</th></tr></thead>
+      <tbody id="vRadky"></tbody>
+    </table></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+      <a id="vExport" class="btn" href="#" style="text-decoration:none">Stáhnout cestovní příkaz</a>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const modal=document.getElementById('viewModal'), tbody=document.getElementById('vRadky'),
+        title=document.getElementById('vTitle'), info=document.getElementById('vInfo'), exp=document.getElementById('vExport');
+  function esc(s){return (s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function nf(n){return (n||0).toLocaleString('cs-CZ');}
+  document.getElementById('vZavri').onclick=()=>modal.style.display='none';
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.style.display='none';});
+  window.zobrazJizdy=async function(btn){
+    title.textContent='Načítám…'; tbody.innerHTML=''; info.textContent=''; modal.style.display='flex';
+    try{
+      const r=await fetch(btn.dataset.nahled); const j=await r.json();
+      if(j.chyba){info.textContent=j.chyba;title.textContent='Jízdy';return;}
+      title.textContent=j.spz+' · '+j.model;
+      info.textContent=(j.ridic?('Řidič '+j.ridic+' · '):'')+'tachometr '+nf(j.stav_zac)+' → '+nf(j.stav_kon)+' km · celkem '+nf(j.soucet)+' km';
+      tbody.innerHTML=j.jizdy.map(x=>'<tr>'
+        +'<td>'+esc(x.datum)+'</td><td>'+esc(x.odkud)+'</td><td>'+esc(x.kam)+'</td>'
+        +'<td>'+esc(x.soukroma?'soukromě':x.ucel)+'</td>'
+        +'<td style="text-align:right">'+nf(x.zac)+'</td><td style="text-align:right">'+nf(x.kon)+'</td>'
+        +'<td style="text-align:right;font-weight:600">'+nf(x.km)+'</td></tr>').join('');
+      exp.setAttribute('href', j.exporturl);
+    }catch(err){info.textContent='Chyba spojení.';title.textContent='Jízdy';}
+  };
+})();
+</script>
+
 {% for d in data %}
 <div class="stat" style="margin-bottom:14px;{{ 'opacity:.65' if not d.v.aktivni }}">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -212,14 +255,21 @@
   <!-- Měsíční historie: klik = stáhnout cestovní příkaz -->
   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;align-items:stretch">
     {% for mh in d.mesice_hist %}
-    <a href="{{ url_for('main.kniha_export', id=d.v.id) }}?obdobi={{ '%04d-%02d'|format(mh.rok, mh.mesic) }}"
-       title="Stáhnout cestovní příkaz za {{ mes_zkr[mh.mesic] }} {{ mh.rok }}"
-       style="text-decoration:none;color:inherit;border:1px solid var(--n7);border-radius:9px;padding:7px 10px;min-width:78px;text-align:center">
+    {% if mh.pocet %}
+    <button type="button" onclick="zobrazJizdy(this)"
+       data-nahled="{{ url_for('main.kniha_jizdy_nahled', id=d.v.id) }}?obdobi={{ '%04d-%02d'|format(mh.rok, mh.mesic) }}"
+       title="Zobrazit jízdy za {{ mes_zkr[mh.mesic] }} {{ mh.rok }}"
+       style="border:1px solid var(--n7);border-radius:9px;padding:7px 10px;min-width:80px;text-align:center;background:#fff;cursor:pointer;font-family:inherit">
       <div style="font-size:11px;color:#889">{{ mes_zkr[mh.mesic] }} {{ mh.rok }}</div>
-      {% if mh.pocet %}<div style="font-size:13px;font-weight:700;color:var(--navy)">{{ "{:,.0f}".format(mh.km).replace(",", " ") }} km</div>
-      <div style="font-size:10px;color:var(--cyan-dark)"><i style="font-style:normal">⬇</i> příkaz{% if mh.ma_tank %} · tank{% endif %}</div>
-      {% else %}<div style="font-size:12px;color:#aab;padding-top:3px">doplnit</div>{% endif %}
-    </a>
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">{{ "{:,.0f}".format(mh.km).replace(",", " ") }} km</div>
+      <div style="font-size:10px;color:var(--cyan-dark)">zobrazit{% if mh.ma_tank %} · tank{% endif %}</div>
+    </button>
+    {% else %}
+    <button type="button" title="Vygenerovat jízdy za {{ mes_zkr[mh.mesic] }} {{ mh.rok }}"
+      onclick="const s=this.closest('.stat'); s.querySelector('.kj-obdobi').value='{{ '%04d-%02d'|format(mh.rok, mh.mesic) }}'; s.querySelector('[data-genurl]').click();"
+      style="border:1px dashed var(--n7);border-radius:9px;padding:7px 10px;min-width:80px;text-align:center;color:#99a;font-size:12px;background:#fafbfc;cursor:pointer;font-family:inherit">
+      {{ mes_zkr[mh.mesic] }} {{ mh.rok }}<br><span style="color:var(--cyan-dark)">+ generovat</span></button>
+    {% endif %}
     {% endfor %}
     {% if not d.mesice_hist %}<span class="muted" style="font-size:13px">Zatím žádná historie. Zadej stav tachometru a vygeneruj měsíc.</span>{% endif %}
   </div>
