@@ -149,7 +149,7 @@ def _seed_historie_jizd():
     import json
     from datetime import datetime
     from .models import Vozidlo, Jizda, TachometrStav, Tankovani, Nastaveni
-    PRIZNAK = "seed_historie_jizd_v3"
+    PRIZNAK = "seed_historie_jizd_v4"
     cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_historie.json")
     try:
         if Nastaveni.query.get(PRIZNAK) or not os.path.exists(cesta):
@@ -157,21 +157,31 @@ def _seed_historie_jizd():
         with open(cesta, encoding="utf-8") as f:
             zaznamy = json.load(f)
         vozidla = {(v.spz or "").replace(" ", "").upper(): v for v in Vozidlo.query.all()}
-        # historickou palivovou stopu vlastní jen seed → před re-syncem smaž (CCS/karta zůstanou)
+        # PLNĚ AUTORITATIVNÍ re-sync: u aut z datasetu smaž VŠECHNY jízdy, tachometry i
+        # historickou palivovou stopu (vyčistí i bludné/ruční záznamy) a postav je čistě z excelů.
+        dataset_ids = {vozidla[k].id for k in
+                       {(z["spz"] or "").replace(" ", "").upper() for z in zaznamy} if k in vozidla}
         Tankovani.query.filter_by(zdroj="historie").delete()
+        for vid in dataset_ids:
+            Jizda.query.filter_by(vozidlo_id=vid).delete()
+            TachometrStav.query.filter_by(vozidlo_id=vid).delete()
+        db.session.flush()
+        # tachometr_pocatek přepočítáme z dat (na začátek nejstaršího měsíce)
+        pocatek_nastaven = set()
         naimport = 0
         for z in zaznamy:
             v = vozidla.get((z["spz"] or "").replace(" ", "").upper())
             if not v:
                 continue
             rok, mesic = z["rok"], z["mesic"]
-            # re-sync z autoritativního souboru: smaž případnou předchozí verzi tohoto měsíce
-            # (ručně generované měsíce, které v souboru nejsou, zůstanou nedotčené)
-            Jizda.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).delete()
-            # počáteční tachometr auta = začátek nejstaršího importovaného měsíce
+            # počáteční tachometr auta = nejnižší začátek napříč všemi měsíci (přepíše i starou špatnou hodnotu)
             prvni_zac = next((j["zac"] for j in z["jizdy"] if j.get("zac") is not None), None)
-            if prvni_zac is not None and (not v.tachometr_pocatek or v.tachometr_pocatek == 0):
-                v.tachometr_pocatek = int(prvni_zac)
+            if prvni_zac is not None:
+                if v.id not in pocatek_nastaven:
+                    v.tachometr_pocatek = int(prvni_zac)
+                    pocatek_nastaven.add(v.id)
+                else:
+                    v.tachometr_pocatek = min(v.tachometr_pocatek, int(prvni_zac))
             if z.get("ridic") and not v.ridic:
                 v.ridic = z["ridic"][:120]
             for j in z["jizdy"]:
