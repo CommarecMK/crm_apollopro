@@ -49,10 +49,44 @@ def create_app():
         _backfill_tyden()         # převede staré měsíční rozpočty na týdenní
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
         _reset_indexace()         # po restartu uvolní zaseknuté příznaky indexace
+        _uklid_vozidla()          # odstraní smetí (vozidla s neplatnou SPZ z chybného CCS importu)
         _seed_vozidla()           # jednorázově naplní vozový park z dat Fleet
         _seed_historie_jizd()     # jednorázově naimportuje historii jízd (2024–2026)
 
     return app
+
+
+def _je_spz(s):
+    """True, pokud řetězec vypadá jako česká SPZ (např. 1AE N958)."""
+    import re
+    return bool(re.match(r"^\d[A-Z]{1,2}\s?[A-Z0-9]{3,4}$", (s or "").strip().upper()))
+
+
+def _uklid_vozidla():
+    """Jednorázově smaže vozidla založená omylem z CCS faktury (neplatná SPZ = zákaznické
+    číslo / poplatky CCS). Maže jen vozidla bez jízd s neplatnou SPZ + jejich tankování."""
+    from .models import Vozidlo, Jizda, TachometrStav, Tankovani, Nastaveni
+    PRIZNAK = "uklid_vozidla_v1"
+    try:
+        if Nastaveni.query.get(PRIZNAK):
+            return
+        smazano = 0
+        for v in Vozidlo.query.all():
+            if _je_spz(v.spz):
+                continue
+            if Jizda.query.filter_by(vozidlo_id=v.id).first():
+                continue  # má reálné jízdy → nech být, raděj neriskuj
+            Tankovani.query.filter_by(vozidlo_id=v.id).delete()
+            TachometrStav.query.filter_by(vozidlo_id=v.id).delete()
+            db.session.delete(v)
+            smazano += 1
+        db.session.add(Nastaveni(klic=PRIZNAK, hodnota="hotovo"))
+        db.session.commit()
+        if smazano:
+            print(f"[uklid] Smazáno {smazano} chybných vozidel z CCS.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[uklid] vozidla: {e}")
 
 
 def _seed_vozidla():

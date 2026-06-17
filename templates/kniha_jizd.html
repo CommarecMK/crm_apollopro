@@ -226,7 +226,8 @@
       <div class="muted" style="font-size:12px;margin-top:3px">
         {{ d.v.palivo }}{% if d.v.ridic %} · řidič {{ d.v.ridic }}{% endif %}{% if d.v.rok_vyroby %} · {{ d.v.rok_vyroby }}{% endif %}
         · poslední tachometr: <b>{{ "{:,.0f}".format(d.posledni).replace(",", " ") }}</b> km
-        {% if d.spotreba_vyp %}· ø spotřeba <b style="color:var(--cyan-dark)">{{ "%.1f"|format(d.spotreba_vyp)|replace(".", ",") }} l/100 km</b> <span title="{{ d.litry_tot }} l / {{ "{:,.0f}".format(d.km_tot).replace(',',' ') }} km">(vypočteno)</span>{% elif d.v.spotreba %}· {{ d.v.spotreba }} l/100 km{% endif %}
+        {% set mes_zkr = ['','Led','Úno','Bře','Dub','Kvě','Čer','Čvc','Srp','Zář','Říj','Lis','Pro'] %}
+        {% if d.spotreba_vyp %}· spotřeba <b style="color:var(--cyan-dark)">{{ "%.1f"|format(d.spotreba_vyp)|replace(".", ",") }} l/100 km</b>{% if d.spotreba_mes %} <span style="color:#aab">({{ mes_zkr[d.spotreba_mes[1]] }} {{ d.spotreba_mes[0] }})</span>{% endif %}{% elif d.v.spotreba %}· {{ d.v.spotreba }} l/100 km{% endif %}
         {% if d.v.domovska_adresa %}· {{ d.v.domovska_adresa }}{% endif %}
       </div>
       <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
@@ -240,10 +241,12 @@
           {% elif d.stk_dni <= 30 %}<span class="tag" style="background:#fff0e6;color:var(--orange)">STK za {{ d.stk_dni }} dní</span>
           {% else %}<span class="tag">STK do {{ d.v.stk_do.strftime('%-d. %-m. %Y') }}</span>{% endif %}
         {% endif %}
-        {% if d.prejezd and d.prejezd.stav == 'over' %}
-          <span class="tag" style="background:#ffe5e5;color:var(--red)" title="Projekce {{ '{:,.0f}'.format(d.prejezd.projekce).replace(',',' ') }} km ke konci nájmu, limit {{ '{:,.0f}'.format(d.v.najezd_limit).replace(',',' ') }} km">⚠ Přejezd +{{ "{:,.0f}".format(d.prejezd.rozdil).replace(",", " ") }} km{% if d.prejezd.sazba %} · doplatek ~{{ "{:,.0f}".format(d.prejezd.doplatek).replace(",", " ") }} Kč{% else %} · doplň sazbu{% endif %}</span>
-        {% elif d.prejezd and d.prejezd.stav == 'under' %}
-          <span class="tag" style="background:#e6f7ec;color:#1a7f43" title="Limit {{ '{:,.0f}'.format(d.v.najezd_limit).replace(',',' ') }} km">Nájezd OK · projekce {{ "{:,.0f}".format(d.prejezd.projekce).replace(",", " ") }} km</span>
+        {% if d.prejezd and d.prejezd.stav == 'over_now' %}
+          <span class="tag" style="background:#ffe5e5;color:var(--red)" title="Najeto {{ '{:,.0f}'.format(d.prejezd.najeto).replace(',',' ') }} km, limit {{ '{:,.0f}'.format(d.v.najezd_limit).replace(',',' ') }} km">⚠ Přejezd +{{ "{:,.0f}".format(d.prejezd.over).replace(",", " ") }} km už teď{% if d.prejezd.sazba %} · doplatek ~{{ "{:,.0f}".format(d.prejezd.doplatek).replace(",", " ") }} Kč{% else %} · doplň sazbu{% endif %}</span>
+        {% elif d.prejezd and d.prejezd.stav == 'over_proj' %}
+          <span class="tag" style="background:#fff0e6;color:var(--orange)" title="Najeto {{ '{:,.0f}'.format(d.prejezd.najeto).replace(',',' ') }} km, tempem projekce {{ '{:,.0f}'.format(d.prejezd.projekce).replace(',',' ') }} km ke konci nájmu, limit {{ '{:,.0f}'.format(d.v.najezd_limit).replace(',',' ') }} km">⚠ Hrozí přejezd ~+{{ "{:,.0f}".format(d.prejezd.over).replace(",", " ") }} km{% if d.prejezd.sazba %} · doplatek ~{{ "{:,.0f}".format(d.prejezd.doplatek).replace(",", " ") }} Kč{% else %} · doplň sazbu{% endif %}</span>
+        {% elif d.prejezd and d.prejezd.stav == 'ok' %}
+          <span class="tag" style="background:#e6f7ec;color:#1a7f43" title="Limit {{ '{:,.0f}'.format(d.v.najezd_limit).replace(',',' ') }} km{% if d.prejezd.projekce %}, projekce {{ '{:,.0f}'.format(d.prejezd.projekce).replace(',',' ') }} km{% endif %}">Nájezd OK{% if d.prejezd.projekce %} · projekce {{ "{:,.0f}".format(d.prejezd.projekce).replace(",", " ") }} km{% endif %}</span>
         {% endif %}
       </div>
       {% if d.provoz %}
@@ -351,8 +354,6 @@
         <input type="text" name="ridic" value="{{ d.v.ridic or '' }}" style="{{ istyl }};width:130px"></label>
       <label style="{{ lbl }}">Domovská adresa (báze)
         <input type="text" name="domovska_adresa" value="{{ d.v.domovska_adresa or '' }}" placeholder="město / sídlo – pro výpočet jízd" style="{{ istyl }};width:100%;min-width:220px"></label>
-      <label style="{{ lbl }}">Počáteční stav km
-        <input type="text" name="tachometr_pocatek" value="{{ d.v.tachometr_pocatek or '' }}" style="{{ istyl }};width:120px"></label>
       <label style="{{ lbl }}">VIN
         <input type="text" name="vin" value="{{ d.v.vin or '' }}" style="{{ istyl }};width:175px"></label>
       <label style="{{ lbl }}">Rok výroby

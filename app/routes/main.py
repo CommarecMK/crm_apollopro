@@ -732,48 +732,61 @@ def kniha_jizd():
         # PHM (palivo): litry pro spotřebu, Kč pro náklady; vše z tankování (CCS/karta/historie)
         vsechna_tank = Tankovani.query.filter_by(vozidlo_id=v.id).all()
         phm = [t for t in vsechna_tank if t.kategorie != "ostatni"]
-        litry_tot = sum((t.litry or 0) for t in phm if t.litry)
         castka_tot = sum((t.castka or 0) for t in phm if t.castka)
         mesice_tank = {(t.datum.year, t.datum.month) for t in phm if t.datum}
-        km_tot = sum((j.km or 0) for j in jzy)
-        spotreba_vyp = round(litry_tot / km_tot * 100, 1) if (km_tot > 0 and litry_tot > 0) else None
         phm_mes = round(castka_tot / len(mesice_tank)) if mesice_tank else None
+        # spotřeba z POSLEDNÍHO dokončeného měsíce (km i litry za stejný měsíc; bez aktuálního měsíce)
+        litry_mes = {}
+        for t in phm:
+            if t.datum and t.litry:
+                litry_mes[(t.datum.year, t.datum.month)] = litry_mes.get((t.datum.year, t.datum.month), 0) + t.litry
+        kand = [k for k in km_mes if k in litry_mes and km_mes[k] > 0 and k != akt]
+        spotreba_vyp = spotreba_mes = None
+        if kand:
+            k = max(kand)
+            spotreba_vyp = round(litry_mes[k] / km_mes[k] * 100, 1)
+            spotreba_mes = k
 
-        # projekce nájezdu ke konci leasingu + doplatek za přejezd / neujeté km
+        # nájezd vs limit: ujeté km během leasingu = aktuální stav − nejstarší známý stav.
+        # (nejstarší stav odvodíme z měsíčních tachometrů, ne ze pole tachometr_pocatek, které
+        #  nemusí odpovídat začátku leasingu)
         prejezd = None
-        if v.najem_od and v.najem_do and v.najezd_limit:
-            total_dnu = (v.najem_do - v.najem_od).days
-            uplynulo = (dnes - v.najem_od).days
-            ujeto = max(predchozi - (v.tachometr_pocatek or 0), 0)
-            if total_dnu > 0 and uplynulo > 7 and ujeto > 0:
-                projekce = round(ujeto / min(uplynulo, total_dnu) * total_dnu)
-                rozdil = projekce - v.najezd_limit
+        if v.najezd_limit:
+            starty = [stav_mes[k] - km_mes.get(k, 0) for k in stav_mes if stav_mes.get(k)]
+            earliest = min(starty) if starty else (v.tachometr_pocatek or 0)
+            najeto = max(predchozi - earliest, 0)
+            rozdil_ted = najeto - v.najezd_limit
+            projekce = None
+            lease_mes = None
+            if v.najem_od and v.najem_do:
+                total_dnu = (v.najem_do - v.najem_od).days
+                uplynulo = (dnes - v.najem_od).days
                 lease_mes = max(total_dnu / 30.44, 1)
-                if rozdil > 0:
-                    naklad = rozdil * (v.cena_prejezd_km or 0)
-                    prejezd = {"stav": "over", "projekce": projekce, "rozdil": rozdil,
-                               "doplatek": round(naklad), "doplatek_dph": round(naklad * 1.21),
-                               "mesicne": round(naklad / lease_mes) if v.cena_prejezd_km else None,
-                               "sazba": v.cena_prejezd_km}
-                else:
-                    naklad = -rozdil * (v.cena_neujete_km or 0)
-                    prejezd = {"stav": "under", "projekce": projekce, "rozdil": rozdil,
-                               "doplatek": round(naklad), "doplatek_dph": round(naklad * 1.21),
-                               "mesicne": round(naklad / lease_mes) if v.cena_neujete_km else None,
-                               "sazba": v.cena_neujete_km}
+                if total_dnu > 0 and uplynulo > 7 and najeto > 0:
+                    projekce = round(najeto / min(uplynulo, total_dnu) * total_dnu)
+            if rozdil_ted > 0:                       # už teď přes limit
+                stav, over, sazba = "over_now", rozdil_ted, v.cena_prejezd_km
+            elif projekce and projekce > v.najezd_limit:   # bude přes do konce nájmu
+                stav, over, sazba = "over_proj", projekce - v.najezd_limit, v.cena_prejezd_km
+            else:
+                stav, over, sazba = "ok", None, None
+            naklad = (over or 0) * (sazba or 0)
+            prejezd = {"stav": stav, "najeto": najeto, "projekce": projekce, "over": over,
+                       "doplatek": round(naklad) if over else 0, "sazba": sazba,
+                       "mesicne": round(naklad / lease_mes) if (over and sazba and lease_mes) else None}
 
         # měsíční provoz: nájem (splátka) + PHM/měs + případný přejezd rozpuštěný na měsíc
         provoz = None
         if v.splatka or phm_mes:
             slozky = {"najem": round(v.splatka) if v.splatka else 0,
                       "phm": phm_mes or 0,
-                      "prejezd": (prejezd["mesicne"] or 0) if (prejezd and prejezd["stav"] == "over" and prejezd.get("mesicne")) else 0}
+                      "prejezd": (prejezd["mesicne"] or 0) if (prejezd and prejezd["stav"] in ("over_now", "over_proj") and prejezd.get("mesicne")) else 0}
             provoz = {"celkem": slozky["najem"] + slozky["phm"] + slozky["prejezd"], **slozky}
 
         data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank,
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
                      "stk_dni": stk_dni, "mesice_hist": mesice_hist,
-                     "spotreba_vyp": spotreba_vyp, "litry_tot": round(litry_tot), "km_tot": round(km_tot),
+                     "spotreba_vyp": spotreba_vyp, "spotreba_mes": spotreba_mes,
                      "prejezd": prejezd, "provoz": provoz})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)
@@ -794,6 +807,13 @@ def _uloz_nastaveni(klic, hodnota):
     n.hodnota = hodnota
     db.session.add(n)
     db.session.commit()
+
+
+def _je_spz(s):
+    """True, pokud řetězec vypadá jako česká SPZ (např. 1AE N958) — brání zakládání
+    'aut' ze zákaznických čísel / poplatků na CCS faktuře."""
+    import re
+    return bool(re.match(r"^\d[A-Z]{1,2}\s?[A-Z0-9]{3,4}$", (s or "").strip().upper()))
 
 
 def _vozidlo_dle_spz(spz):
@@ -858,8 +878,8 @@ def kniha_tankovani_uloz():
                                      litry=litry_v, castka=castka_v).first():
             preskoceno += 1
             continue
-        # SPZ z faktury, která není v DB → založ návrh vozidla a připoj
-        if not vid and spz and spz not in ("", "— NEZAŘAZENO —"):
+        # SPZ z faktury, která není v DB → založ návrh vozidla a připoj (jen platná SPZ)
+        if not vid and _je_spz(spz):
             vid = _vozidlo_dle_spz(spz)
             if not vid:
                 nove = Vozidlo(spz=spz, model="(z faktury CCS)", palivo="nafta", aktivni=True)
