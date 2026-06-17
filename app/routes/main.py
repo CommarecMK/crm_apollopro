@@ -705,14 +705,14 @@ def kniha_jizd():
             km_mes[k] = km_mes.get(k, 0) + (j.km or 0)
             pocet_mes[k] = pocet_mes.get(k, 0) + 1
         stav_mes = {(t.rok, t.mesic): t.stav_km for t in cten}
+        vsechna_tank = Tankovani.query.filter_by(vozidlo_id=v.id).all()
         tank_mes = {(t.datum.year, t.datum.month)
-                    for t in Tankovani.query.filter_by(vozidlo_id=v.id).all()
-                    if t.datum and t.kategorie != "ostatni"}
-        # klíče = měsíce s jízdami/tachometrem/tankováním + most recent gap až po aktuální měsíc
-        klice = set(km_mes) | set(stav_mes) | tank_mes | {akt}
-        if km_mes or stav_mes or tank_mes:
-            posl_k = max(klice)
-            r0, m0 = posl_k
+                    for t in vsechna_tank
+                    if t.datum and t.kategorie != "ostatni" and (t.datum.year, t.datum.month) <= akt}
+        # klíče = měsíce s jízdami/tachometrem/tankováním (jen ≤ aktuální měsíc) + gap až po dnešek
+        klice = {k for k in (set(km_mes) | set(stav_mes) | tank_mes) if k <= akt} | {akt}
+        if klice:
+            r0, m0 = max(klice)
             while (r0, m0) < akt:               # dopň prázdné měsíce mezi poslední historií a dneškem
                 m0 += 1
                 if m0 > 12:
@@ -729,23 +729,31 @@ def kniha_jizd():
             km_do = next_servis - predchozi
             servis_stav = "po" if km_do <= 0 else ("blizko" if km_do <= 1000 else "ok")
         stk_dni = (v.stk_do - date.today()).days if v.stk_do else None
-        # PHM (palivo): litry pro spotřebu, Kč pro náklady; vše z tankování (CCS/karta/historie)
-        vsechna_tank = Tankovani.query.filter_by(vozidlo_id=v.id).all()
-        phm = [t for t in vsechna_tank if t.kategorie != "ostatni"]
-        castka_tot = sum((t.castka or 0) for t in phm if t.castka)
-        mesice_tank = {(t.datum.year, t.datum.month) for t in phm if t.datum}
-        phm_mes = round(castka_tot / len(mesice_tank)) if mesice_tank else None
-        # spotřeba z POSLEDNÍHO dokončeného měsíce (km i litry za stejný měsíc; bez aktuálního měsíce)
-        litry_mes = {}
-        for t in phm:
-            if t.datum and t.litry:
-                litry_mes[(t.datum.year, t.datum.month)] = litry_mes.get((t.datum.year, t.datum.month), 0) + t.litry
-        kand = [k for k in km_mes if k in litry_mes and km_mes[k] > 0 and k != akt]
-        spotreba_vyp = spotreba_mes = None
-        if kand:
-            k = max(kand)
-            spotreba_vyp = round(litry_mes[k] / km_mes[k] * 100, 1)
-            spotreba_mes = k
+        # PHM: spotřeba = suma litrů / suma km (přes celou historii). Per měsíc DEDUP:
+        # historie má přednost před CCS/karta, ať se stejné palivo nepočítá dvakrát.
+        hist_l, real_l, hist_c, real_c = {}, {}, {}, {}
+        for t in vsechna_tank:
+            if t.kategorie == "ostatni" or not t.datum:
+                continue
+            key = (t.datum.year, t.datum.month)
+            if key > akt:                       # ignoruj budoucí (překlepová) data
+                continue
+            if t.zdroj == "historie":
+                if t.litry:
+                    hist_l[key] = hist_l.get(key, 0) + t.litry
+                if t.castka:
+                    hist_c[key] = hist_c.get(key, 0) + t.castka
+            else:
+                if t.litry:
+                    real_l[key] = real_l.get(key, 0) + t.litry
+                if t.castka:
+                    real_c[key] = real_c.get(key, 0) + t.castka
+        litry_tot = sum(hist_l.get(m, real_l.get(m, 0)) for m in set(hist_l) | set(real_l))
+        km_tot = sum((j.km or 0) for j in jzy)
+        spotreba_vyp = round(litry_tot / km_tot * 100, 1) if (km_tot > 0 and litry_tot > 0) else None
+        # PHM/měs = průměrné měsíční náklady na palivo (z měsíců, kde palivo je)
+        castka_mes = {m: hist_c.get(m, real_c.get(m, 0)) for m in set(hist_c) | set(real_c)}
+        phm_mes = round(sum(castka_mes.values()) / len(castka_mes)) if castka_mes else None
 
         # nájezd vs limit: ujeté km během leasingu = aktuální stav − nejstarší známý stav.
         # (nejstarší stav odvodíme z měsíčních tachometrů, ne ze pole tachometr_pocatek, které
@@ -786,7 +794,7 @@ def kniha_jizd():
         data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank,
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
                      "stk_dni": stk_dni, "mesice_hist": mesice_hist,
-                     "spotreba_vyp": spotreba_vyp, "spotreba_mes": spotreba_mes,
+                     "spotreba_vyp": spotreba_vyp, "litry_tot": round(litry_tot), "km_tot": round(km_tot),
                      "prejezd": prejezd, "provoz": provoz})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)

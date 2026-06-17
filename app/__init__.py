@@ -149,7 +149,7 @@ def _seed_historie_jizd():
     import json
     from datetime import datetime
     from .models import Vozidlo, Jizda, TachometrStav, Tankovani, Nastaveni
-    PRIZNAK = "seed_historie_jizd_v4"
+    PRIZNAK = "seed_historie_jizd_v5"
     cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_historie.json")
     try:
         if Nastaveni.query.get(PRIZNAK) or not os.path.exists(cesta):
@@ -184,6 +184,7 @@ def _seed_historie_jizd():
                     v.tachometr_pocatek = min(v.tachometr_pocatek, int(prvni_zac))
             if z.get("ridic") and not v.ridic:
                 v.ridic = z["ridic"][:120]
+            from datetime import date as _date
             for j in z["jizdy"]:
                 d = None
                 if j.get("datum"):
@@ -191,6 +192,12 @@ def _seed_historie_jizd():
                         d = datetime.strptime(j["datum"][:10], "%Y-%m-%d").date()
                     except ValueError:
                         pass
+                # překlepová data mimo měsíc záznamu (např. 2026-12 v prosinci 2025) srovnej na měsíc
+                if d and (d.year, d.month) != (rok, mesic):
+                    try:
+                        d = _date(rok, mesic, min(d.day, 28))
+                    except ValueError:
+                        d = _date(rok, mesic, 1)
                 db.session.add(Jizda(vozidlo_id=v.id, rok=rok, mesic=mesic, datum=d,
                                      odkud=(j.get("odkud") or "")[:300], kam=(j.get("kam") or "")[:300],
                                      km=float(j.get("km") or 0),

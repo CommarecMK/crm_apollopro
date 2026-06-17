@@ -227,7 +227,7 @@
         {{ d.v.palivo }}{% if d.v.ridic %} · řidič {{ d.v.ridic }}{% endif %}{% if d.v.rok_vyroby %} · {{ d.v.rok_vyroby }}{% endif %}
         · poslední tachometr: <b>{{ "{:,.0f}".format(d.posledni).replace(",", " ") }}</b> km
         {% set mes_zkr = ['','Led','Úno','Bře','Dub','Kvě','Čer','Čvc','Srp','Zář','Říj','Lis','Pro'] %}
-        {% if d.spotreba_vyp %}· spotřeba <b style="color:var(--cyan-dark)">{{ "%.1f"|format(d.spotreba_vyp)|replace(".", ",") }} l/100 km</b>{% if d.spotreba_mes %} <span style="color:#aab">({{ mes_zkr[d.spotreba_mes[1]] }} {{ d.spotreba_mes[0] }})</span>{% endif %}{% elif d.v.spotreba %}· {{ d.v.spotreba }} l/100 km{% endif %}
+        {% if d.spotreba_vyp %}· spotřeba <b style="color:var(--cyan-dark)" title="{{ d.litry_tot }} l / {{ '{:,.0f}'.format(d.km_tot).replace(',',' ') }} km celkem">{{ "%.1f"|format(d.spotreba_vyp)|replace(".", ",") }} l/100 km</b> <span style="color:#aab">(průměr)</span>{% elif d.v.spotreba %}· {{ d.v.spotreba }} l/100 km{% endif %}
         {% if d.v.domovska_adresa %}· {{ d.v.domovska_adresa }}{% endif %}
       </div>
       <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
