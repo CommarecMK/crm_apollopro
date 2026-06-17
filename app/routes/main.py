@@ -702,10 +702,35 @@ def kniha_jizd():
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
                      "stk_dni": stk_dni})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
+    # Napojená OneDrive složka s fakturami CCS
+    ccs_odkaz = _nastaveni("kniha_ccs_slozka")
+    ccs_soubory, ccs_drive = [], None
+    if ccs_odkaz and onedrive_service.je_nakonfigurovano():
+        ds = onedrive_service.vsechny_soubory(ccs_odkaz)
+        if ds:
+            ccs_drive = ds["drive_id"]
+            ccs_soubory = [s for s in ds["soubory"] if s["nazev"].lower().endswith(".pdf")]
+            ccs_soubory.sort(key=lambda s: s.get("zmeneno") or "", reverse=True)
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
                            akt_rok=now.year, akt_mesic=now.month, nezarazene=nezarazene,
-                           vozidla_sel=[[v.id, v.spz] for v in vozidla])
+                           vozidla_sel=[[v.id, v.spz] for v in vozidla],
+                           ccs_odkaz=ccs_odkaz, ccs_soubory=ccs_soubory, ccs_drive=ccs_drive,
+                           onedrive_ok=onedrive_service.je_nakonfigurovano())
+
+
+def _nastaveni(klic, default=""):
+    from ..models import Nastaveni
+    n = Nastaveni.query.get(klic)
+    return n.hodnota if n and n.hodnota else default
+
+
+def _uloz_nastaveni(klic, hodnota):
+    from ..models import Nastaveni
+    n = Nastaveni.query.get(klic) or Nastaveni(klic=klic)
+    n.hodnota = hodnota
+    db.session.add(n)
+    db.session.commit()
 
 
 def _vozidlo_dle_spz(spz):
@@ -719,17 +744,38 @@ def _vozidlo_dle_spz(spz):
     return None
 
 
+def _doplň_vozidla(vysledek):
+    for r in vysledek.get("radky", []):
+        r["vozidlo_id"] = _vozidlo_dle_spz(r.get("spz"))
+        r["zdroj"] = "ccs"
+    return vysledek
+
+
 @bp.route("/kniha-jizd/ccs-import", methods=["POST"])
 @zakazky_required
 def kniha_ccs_import():
     soubor = request.files.get("soubor")
     if not soubor or not soubor.filename:
         return jsonify({"radky": [], "chyba": "Nevybral jsi soubor."})
-    vysledek = ai_service.nacti_ccs_fakturu(soubor.read())
-    for r in vysledek.get("radky", []):
-        r["vozidlo_id"] = _vozidlo_dle_spz(r.get("spz"))
-        r["zdroj"] = "ccs"
-    return jsonify(vysledek)
+    return jsonify(_doplň_vozidla(ai_service.nacti_ccs_fakturu(soubor.read())))
+
+
+@bp.route("/kniha-jizd/ccs-slozka", methods=["POST"])
+@zakazky_required
+def kniha_ccs_slozka():
+    _uloz_nastaveni("kniha_ccs_slozka", request.form.get("odkaz", "").strip())
+    flash("Složka s fakturami CCS uložena." if request.form.get("odkaz", "").strip() else "Odkaz odebrán.", "info")
+    return redirect(url_for("main.kniha_jizd"))
+
+
+@bp.route("/kniha-jizd/ccs-import-onedrive", methods=["POST"])
+@zakazky_required
+def kniha_ccs_import_onedrive():
+    j = request.get_json(silent=True) or {}
+    obsah = onedrive_service.stahni(j.get("drive_id"), j.get("item_id"))
+    if not obsah:
+        return jsonify({"radky": [], "chyba": "Soubor se nepodařilo stáhnout z OneDrive."})
+    return jsonify(_doplň_vozidla(ai_service.nacti_ccs_fakturu(obsah)))
 
 
 @bp.route("/kniha-jizd/tankovani-uloz", methods=["POST"])

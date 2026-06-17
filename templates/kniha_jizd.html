@@ -21,6 +21,30 @@
   </div>
 </div>
 
+<!-- Faktury CCS z OneDrive složky -->
+{% if onedrive_ok %}
+<div class="stat" style="margin-bottom:18px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Faktury CCS z OneDrive složky</h3>
+  <form method="post" action="{{ url_for('main.kniha_ccs_slozka') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="url" name="odkaz" value="{{ ccs_odkaz }}" placeholder="Odkaz na SharePoint/OneDrive složku s fakturami CCS"
+           style="flex:1;min-width:320px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+    <button class="btn btn-ghost" type="submit">Uložit složku</button>
+  </form>
+  {% if ccs_soubory %}
+  <div class="tabulka"><table>
+    <thead><tr><th>Faktura (PDF)</th><th>Změněno</th><th></th></tr></thead>
+    <tbody>
+      {% for s in ccs_soubory %}
+      <tr><td>{{ s.nazev }}</td><td class="muted" style="font-size:12px">{{ s.zmeneno or '' }}</td>
+        <td style="text-align:right"><button class="btn" type="button" data-id="{{ s.id }}" onclick="ccsZOneDrive(this)" style="font-size:12px;padding:6px 12px">Načíst (AI)</button></td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% elif ccs_odkaz %}<p class="muted" style="font-size:13px">Ve složce nejsou žádná PDF (nebo se nepodařilo načíst).</p>{% endif %}
+</div>
+{% endif %}
+
 <div id="ccsModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:86vh;overflow:auto;padding:20px 22px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -49,26 +73,36 @@
   function optVoz(sel){return '<option value="">— nezařazeno —</option>'+VOZ.map(v=>'<option value="'+v[0]+'"'+(String(sel)===String(v[0])?' selected':'')+'>'+esc(v[1])+'</option>').join('');}
   document.getElementById('ccsZavri').onclick=()=>modal.style.display='none';
   document.getElementById('ccsZrusit').onclick=()=>modal.style.display='none';
+  function zobrazReviz(j){
+    if(j.chyba){stav.textContent=j.chyba;return;}
+    if(!j.radky||!j.radky.length){stav.textContent='Nenašel jsem žádná tankování.';return;}
+    tbody.innerHTML=j.radky.map(x=>'<tr data-spz="'+esc(x.spz||'')+'">'
+      +'<td><input type="checkbox" class="t-ch" checked></td>'
+      +'<td><input class="t-datum" value="'+esc(x.datum)+'" style="'+istyl+';width:110px"></td>'
+      +'<td><select class="t-voz" style="'+istyl+'">'+optVoz(x.vozidlo_id)+'</select><div class="muted" style="font-size:10px">'+esc(x.spz||'')+'</div></td>'
+      +'<td><input class="t-misto" value="'+esc(x.misto)+'" style="'+istyl+';width:100%"></td>'
+      +'<td><input class="t-druh" value="'+esc(x.druh||'')+'" style="'+istyl+';width:90px"></td>'
+      +'<td><select class="t-kat" style="'+istyl+'"><option value="phm"'+(x.kategorie!=='ostatni'?' selected':'')+'>PHM</option><option value="ostatni"'+(x.kategorie==='ostatni'?' selected':'')+'>Ostatní</option></select></td>'
+      +'<td style="text-align:right"><input class="t-litry" value="'+esc(x.litry)+'" style="'+istyl+';width:70px;text-align:right"></td>'
+      +'<td style="text-align:right"><input class="t-castka" value="'+esc(x.castka)+'" style="'+istyl+';width:80px;text-align:right"></td></tr>').join('');
+    vysl.textContent=''; stav.textContent=''; modal.style.display='flex';
+  }
   form.addEventListener('submit',async e=>{
     e.preventDefault(); const b=form.querySelector('button[type=submit]'); b.disabled=true; const pv=b.textContent; b.textContent='AI čte fakturu…'; stav.textContent='';
     try{
-      const r=await fetch("{{ url_for('main.kniha_ccs_import', ) }}",{method:'POST',headers:{'X-CSRFToken':CSRF},body:new FormData(form)});
-      const j=await r.json();
-      if(j.chyba){stav.textContent=j.chyba;return;}
-      if(!j.radky||!j.radky.length){stav.textContent='Nenašel jsem žádná tankování.';return;}
-      tbody.innerHTML=j.radky.map(x=>'<tr data-spz="'+esc(x.spz||'')+'">'
-        +'<td><input type="checkbox" class="t-ch" checked></td>'
-        +'<td><input class="t-datum" value="'+esc(x.datum)+'" style="'+istyl+';width:110px"></td>'
-        +'<td><select class="t-voz" style="'+istyl+'">'+optVoz(x.vozidlo_id)+'</select><div class="muted" style="font-size:10px">'+esc(x.spz||'')+'</div></td>'
-        +'<td><input class="t-misto" value="'+esc(x.misto)+'" style="'+istyl+';width:100%"></td>'
-        +'<td><input class="t-druh" value="'+esc(x.druh||'')+'" style="'+istyl+';width:90px"></td>'
-        +'<td><select class="t-kat" style="'+istyl+'"><option value="phm"'+(x.kategorie!=='ostatni'?' selected':'')+'>PHM</option><option value="ostatni"'+(x.kategorie==='ostatni'?' selected':'')+'>Ostatní</option></select></td>'
-        +'<td style="text-align:right"><input class="t-litry" value="'+esc(x.litry)+'" style="'+istyl+';width:70px;text-align:right"></td>'
-        +'<td style="text-align:right"><input class="t-castka" value="'+esc(x.castka)+'" style="'+istyl+';width:80px;text-align:right"></td></tr>').join('');
-      vysl.textContent=''; modal.style.display='flex';
+      const r=await fetch("{{ url_for('main.kniha_ccs_import') }}",{method:'POST',headers:{'X-CSRFToken':CSRF},body:new FormData(form)});
+      zobrazReviz(await r.json());
     }catch(err){stav.textContent='Chyba spojení.';}
     finally{b.disabled=false;b.textContent=pv;}
   });
+  window.ccsZOneDrive=async function(btn){
+    btn.disabled=true; const pv=btn.textContent; btn.textContent='AI čte…'; stav.textContent='Načítám z OneDrive…';
+    try{
+      const r=await fetch("{{ url_for('main.kniha_ccs_import_onedrive') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({drive_id:"{{ ccs_drive }}",item_id:btn.dataset.id})});
+      zobrazReviz(await r.json());
+    }catch(err){stav.textContent='Chyba spojení.';}
+    finally{btn.disabled=false;btn.textContent=pv;}
+  };
   document.getElementById('ccsUloz').addEventListener('click',async (e)=>{
     const radky=[];
     tbody.querySelectorAll('tr').forEach(tr=>{

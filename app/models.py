@@ -107,6 +107,13 @@ class FreeloSnapshot(db.Model):
     data    = db.Column(db.Text)
 
 
+class Nastaveni(db.Model):
+    """Jednoduché klíč-hodnota nastavení aplikace (např. odkazy na OneDrive složky)."""
+    __tablename__ = "nastaveni"
+    klic    = db.Column(db.String(80), primary_key=True)
+    hodnota = db.Column(db.Text)
+
+
 class Vozidlo(db.Model):
     """Vozidlo pro knihu jízd."""
     __tablename__ = "vozidlo"
