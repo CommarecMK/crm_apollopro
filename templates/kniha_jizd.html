@@ -21,56 +21,6 @@
   </div>
 </div>
 
-<!-- Faktury CCS z OneDrive složky -->
-{% if onedrive_ok %}
-<div class="stat" style="margin-bottom:18px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Faktury CCS z OneDrive složky</h3>
-  <form method="post" action="{{ url_for('main.kniha_ccs_slozka') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="url" name="odkaz" value="{{ ccs_odkaz }}" placeholder="Odkaz na SharePoint/OneDrive složku s fakturami CCS"
-           style="flex:1;min-width:320px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
-    <button class="btn btn-ghost" type="submit">Uložit složku</button>
-  </form>
-  {% if ccs_soubory %}
-  <div class="tabulka"><table>
-    <thead><tr><th>Faktura (PDF)</th><th>Změněno</th><th></th></tr></thead>
-    <tbody>
-      {% for s in ccs_soubory %}
-      <tr><td>{{ s.nazev }}</td><td class="muted" style="font-size:12px">{{ s.zmeneno or '' }}</td>
-        <td style="text-align:right"><button class="btn" type="button" data-id="{{ s.id }}" onclick="ccsZOneDrive(this)" style="font-size:12px;padding:6px 12px">Načíst</button></td></tr>
-      {% endfor %}
-    </tbody>
-  </table></div>
-  {% elif ccs_odkaz %}<p class="muted" style="font-size:13px">Ve složce nejsou žádná PDF (nebo se nepodařilo načíst).</p>{% endif %}
-</div>
-{% endif %}
-
-<!-- Import vozidel z Fleet (Souhrn aut.xlsx) -->
-<div class="stat" style="margin-bottom:18px">
-  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Import vozidel z Fleet (Souhrn aut.xlsx)</h3>
-  <p class="muted" style="font-size:12px;margin:0 0 10px">Naimportuje/aktualizuje vozidla podle SPZ (model, splátka, nájem, nájezd, servisní interval). Existující vozidla jen doplní, nepřepíše ručně zadané km.</p>
-  <form method="post" action="{{ url_for('main.kniha_fleet_import') }}" enctype="multipart/form-data" data-noload
-        style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="file" name="soubor" accept=".xlsx" required style="font-size:13px">
-    <button class="btn" type="submit">Naimportovat ze souboru</button>
-  </form>
-  {% if onedrive_ok %}
-  <form method="post" action="{{ url_for('main.kniha_fleet_slozka') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="url" name="odkaz" value="{{ fleet_odkaz }}" placeholder="Odkaz na SharePoint/OneDrive složku Fleet (obsahuje Souhrn aut.xlsx)"
-           style="flex:1;min-width:320px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
-    <button class="btn btn-ghost" type="submit">Uložit složku</button>
-  </form>
-  {% if fleet_odkaz %}
-  <form method="post" action="{{ url_for('main.kniha_fleet_import_onedrive') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn" type="submit" style="font-size:13px">Naimportovat z OneDrive (najde Souhrn aut.xlsx)</button>
-  </form>
-  {% endif %}
-  {% endif %}
-</div>
-
 <div id="ccsModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:86vh;overflow:auto;padding:20px 22px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -121,14 +71,6 @@
     }catch(err){stav.textContent='Chyba spojení.';}
     finally{b.disabled=false;b.textContent=pv;}
   });
-  window.ccsZOneDrive=async function(btn){
-    btn.disabled=true; const pv=btn.textContent; btn.textContent='Čtu…'; stav.textContent='Načítám z OneDrive…';
-    try{
-      const r=await fetch("{{ url_for('main.kniha_ccs_import_onedrive') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({drive_id:"{{ ccs_drive }}",item_id:btn.dataset.id})});
-      zobrazReviz(await r.json());
-    }catch(err){stav.textContent='Chyba spojení.';}
-    finally{btn.disabled=false;btn.textContent=pv;}
-  };
   document.getElementById('ccsUloz').addEventListener('click',async (e)=>{
     const radky=[];
     tbody.querySelectorAll('tr').forEach(tr=>{
@@ -239,7 +181,7 @@
       <span style="font-weight:700;color:var(--navy);font-size:18px">{{ d.v.spz }}</span>
       <span class="muted" style="margin-left:8px">{{ d.v.model or '' }}</span>
       <div class="muted" style="font-size:12px;margin-top:3px">
-        {{ d.v.palivo }}{% if d.v.rok_vyroby %} · {{ d.v.rok_vyroby }}{% endif %}{% if d.v.spotreba %} · {{ d.v.spotreba }} l/100 km{% endif %}
+        {{ d.v.palivo }}{% if d.v.ridic %} · řidič {{ d.v.ridic }}{% endif %}{% if d.v.rok_vyroby %} · {{ d.v.rok_vyroby }}{% endif %}{% if d.v.spotreba %} · {{ d.v.spotreba }} l/100 km{% endif %}
         · poslední tachometr: <b>{{ "{:,.0f}".format(d.posledni).replace(",", " ") }}</b> km
         {% if d.v.domovska_adresa %}· {{ d.v.domovska_adresa }}{% endif %}
       </div>
@@ -311,14 +253,6 @@
     <button class="btn btn-ghost" type="button" data-url="{{ url_for('main.kniha_export', id=d.v.id) }}"
             onclick="window.location=this.dataset.url+'?obdobi='+this.closest('.stat').querySelector('.kj-obdobi').value"
             style="padding:7px 12px;font-size:13px">Stáhnout Excel</button>
-    {% if onedrive_ok %}
-    <form method="post" action="{{ url_for('main.kniha_export_onedrive', id=d.v.id) }}" style="display:inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="obdobi" class="kj-odrive-obdobi">
-      <button class="btn btn-ghost" type="submit" style="padding:7px 12px;font-size:13px"
-              onclick="this.form.querySelector('.kj-odrive-obdobi').value=this.closest('.stat').querySelector('.kj-obdobi').value">Uložit na OneDrive</button>
-    </form>
-    {% endif %}
     {% if d.mesice_jizd %}<span class="muted" style="font-size:12px">uloženo: {% for r, m in d.mesice_jizd %}{{ '%02d/%04d'|format(m, r) }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
   </div>
 
@@ -346,6 +280,7 @@
         {% for p in ['nafta','benzin','elektro','hybrid'] %}<option value="{{ p }}" {{ 'selected' if p==d.v.palivo }}>{{ p }}</option>{% endfor %}
       </select>
       <input type="text" name="spotreba" value="{{ d.v.spotreba or '' }}" placeholder="l/100 km" style="{{ istyl }};width:100px">
+      <input type="text" name="ridic" value="{{ d.v.ridic or '' }}" placeholder="Řidič" style="{{ istyl }};width:130px">
       <input type="text" name="tachometr_pocatek" value="{{ d.v.tachometr_pocatek or '' }}" placeholder="počáteční km" style="{{ istyl }};width:120px">
       <input type="text" name="domovska_adresa" value="{{ d.v.domovska_adresa or '' }}" placeholder="Domovská adresa" style="{{ istyl }};flex:1;min-width:200px">
       <input type="text" name="vin" value="{{ d.v.vin or '' }}" placeholder="VIN" style="{{ istyl }};width:160px">
@@ -391,6 +326,7 @@
   <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Palivo</div>
     <select name="palivo" style="{{ istyl }}">{% for p in ['nafta','benzin','elektro','hybrid'] %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select></div>
   <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Spotřeba l/100</div><input type="text" name="spotreba" placeholder="6,5" style="{{ istyl }};width:90px"></div>
+  <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Řidič</div><input type="text" name="ridic" placeholder="Příjmení" style="{{ istyl }};width:120px"></div>
   <div><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Počáteční km</div><input type="text" name="tachometr_pocatek" placeholder="0" style="{{ istyl }};width:110px"></div>
   <div style="flex:1;min-width:200px"><div style="font-size:11px;text-transform:uppercase;color:#99a;font-weight:600">Domovská adresa</div><input type="text" name="domovska_adresa" placeholder="Sídlo / parkoviště" style="{{ istyl }};width:100%"></div>
   <button class="btn" type="submit">+ Přidat</button>

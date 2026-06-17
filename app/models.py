@@ -122,6 +122,7 @@ class Vozidlo(db.Model):
     model     = db.Column(db.String(120))
     palivo    = db.Column(db.String(20), default="nafta")   # nafta | benzin | elektro | hybrid
     spotreba  = db.Column(db.Float)                          # l/100 km (průměr)
+    ridic     = db.Column(db.String(120))                    # obvyklý řidič (do cestovního příkazu)
     tachometr_pocatek = db.Column(db.Integer, default=0)     # stav km na začátku evidence
     domovska_adresa   = db.Column(db.String(300))
     aktivni   = db.Column(db.Boolean, default=True)

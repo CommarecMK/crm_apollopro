@@ -49,8 +49,59 @@ def create_app():
         _backfill_tyden()         # převede staré měsíční rozpočty na týdenní
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
         _reset_indexace()         # po restartu uvolní zaseknuté příznaky indexace
+        _seed_vozidla()           # jednorázově naplní vozový park z dat Fleet
 
     return app
+
+
+def _seed_vozidla():
+    """Jednorázově naplní/doplní vozidla z firemního Fleetu (data z leasingových smluv,
+    předávacích protokolů a Souhrn aut.xlsx). Spustí se jen jednou (příznak v Nastaveni),
+    aby nepřepisoval pozdější ruční úpravy. Upsert dle SPZ — existující jen doplní."""
+    from datetime import date
+    from .models import Vozidlo, Nastaveni
+    PRIZNAK = "seed_vozidla_v1"
+    try:
+        if Nastaveni.query.get(PRIZNAK):
+            return
+        # SPZ, model, palivo, splátka, nájem_od, nájem_do, nájezd_limit, servis_km, VIN, řidič
+        data = [
+            ("1AE N958", "KIA Sportage V 1.6 T-GDi (šedá)", "benzin", 11406, date(2024, 8, 13), date(2026, 8, 13), 60000, 15000, None, "Steiner"),
+            ("1AE U402", "KIA Sportage V 1.6 T-GDi (zelená)", "benzin", 9266, date(2024, 9, 29), date(2026, 9, 29), 60000, 15000, "U5YPV81BHRL280518", "Matějka"),
+            ("1AI N520", "Ford Puma 1.0 EcoBoost mHEV Titanium", "benzin", 6250, date(2025, 3, 27), date(2027, 3, 27), 40000, 30000, "WF02XXERK2RT51673", None),
+            ("1AJ E369", "VW Tayron 2.0 TDI 4MOTION R-Line", "nafta", 18766, date(2025, 6, 18), date(2027, 6, 18), 60000, 30000, "WVGZZZR47SW022175", "Komárek"),
+            ("1AJ T473", "Škoda Kodiaq (modrý)", "nafta", 11720, date(2025, 6, 26), date(2027, 6, 26), 60000, 30000, None, "Bezděk"),
+            ("1AM Z598", "KIA K4 1.6 T-GDI Exclusive (červená)", "benzin", 10042, date(2026, 2, 26), date(2028, 2, 26), 60000, 15000, "3KPFX51C0TE233772", "Hlavatý"),
+            ("1AP J946", "Škoda Kodiaq (šedá)", "nafta", 13145, date(2026, 6, 2), date(2028, 6, 2), 60000, 30000, None, "Matějka"),
+        ]
+        existujici = {(v.spz or "").replace(" ", "").upper(): v for v in Vozidlo.query.all()}
+        zalozeno = doplneno = 0
+        for spz, model, palivo, splatka, n_od, n_do, najezd, servis, vin, ridic in data:
+            v = existujici.get(spz.replace(" ", "").upper())
+            novy = v is None
+            if novy:
+                v = Vozidlo(spz=spz, aktivni=True, tachometr_pocatek=0)
+                db.session.add(v)
+            # model přepiš jen je-li prázdný nebo placeholder z CCS
+            if novy or not v.model or "faktur" in (v.model or "").lower():
+                v.model = model
+            if novy:
+                v.palivo = palivo
+            for pole, hod in (("splatka", splatka), ("najem_od", n_od), ("najem_do", n_do),
+                              ("najezd_limit", najezd), ("servis_interval_km", servis),
+                              ("vin", vin), ("ridic", ridic)):
+                if getattr(v, pole) in (None, "") and hod is not None:
+                    setattr(v, pole, hod)
+            zalozeno += novy
+            doplneno += (not novy)
+            if novy:
+                existujici[spz.replace(" ", "").upper()] = v
+        db.session.add(Nastaveni(klic=PRIZNAK, hodnota="hotovo"))
+        db.session.commit()
+        print(f"[seed] Vozidla: založeno {zalozeno}, doplněno {doplneno}.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[seed] vozidla: {e}")
 
 
 def _reset_indexace():
@@ -137,6 +188,7 @@ def _inline_migrace():
                 "posledni_servis_datum": "DATE", "stk_do": "DATE",
                 "najem_od": "DATE", "najem_do": "DATE",
                 "splatka": "FLOAT", "najezd_limit": "INTEGER",
+                "ridic": "VARCHAR(120)",
             },
             "tankovani": {
                 "druh": "VARCHAR(60)", "kategorie": "VARCHAR(20) DEFAULT 'phm'",

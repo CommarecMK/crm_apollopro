@@ -128,7 +128,7 @@ from ..services import (clockify, firmy as firmy_service, snapshot,
                         freelo as freelo_service, snapshot_freelo, onedrive as onedrive_service,
                         dokumenty as dokumenty_service, ai as ai_service,
                         embeddings as embeddings_service, extrakce as extrakce_service,
-                        osm as osm_service, ccs as ccs_service, fleet as fleet_service,
+                        osm as osm_service, ccs as ccs_service,
                         kniha_export as kniha_export_service)
 
 bp = Blueprint("main", __name__)
@@ -707,23 +707,10 @@ def kniha_jizd():
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
                      "stk_dni": stk_dni, "mesice_jizd": mesice_jizd})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
-    # Napojená OneDrive složka s fakturami CCS
-    ccs_odkaz = _nastaveni("kniha_ccs_slozka")
-    ccs_soubory, ccs_drive = [], None
-    if ccs_odkaz and onedrive_service.je_nakonfigurovano():
-        ds = onedrive_service.vsechny_soubory(ccs_odkaz)
-        if ds:
-            ccs_drive = ds["drive_id"]
-            ccs_soubory = [s for s in ds["soubory"] if s["nazev"].lower().endswith(".pdf")]
-            ccs_soubory.sort(key=lambda s: s.get("zmeneno") or "", reverse=True)
-    fleet_odkaz = _nastaveni("kniha_fleet_slozka")
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
                            akt_rok=now.year, akt_mesic=now.month, nezarazene=nezarazene,
-                           vozidla_sel=[[v.id, v.spz] for v in vozidla],
-                           ccs_odkaz=ccs_odkaz, ccs_soubory=ccs_soubory, ccs_drive=ccs_drive,
-                           fleet_odkaz=fleet_odkaz,
-                           onedrive_ok=onedrive_service.je_nakonfigurovano())
+                           vozidla_sel=[[v.id, v.spz] for v in vozidla])
 
 
 def _nastaveni(klic, default=""):
@@ -773,78 +760,6 @@ def kniha_ccs_import():
     if not soubor or not soubor.filename:
         return jsonify({"radky": [], "chyba": "Nevybral jsi soubor."})
     return jsonify(_doplň_vozidla(_precti_ccs(soubor.read())))
-
-
-@bp.route("/kniha-jizd/ccs-slozka", methods=["POST"])
-@zakazky_required
-def kniha_ccs_slozka():
-    _uloz_nastaveni("kniha_ccs_slozka", request.form.get("odkaz", "").strip())
-    flash("Složka s fakturami CCS uložena." if request.form.get("odkaz", "").strip() else "Odkaz odebrán.", "info")
-    return redirect(url_for("main.kniha_jizd"))
-
-
-@bp.route("/kniha-jizd/ccs-import-onedrive", methods=["POST"])
-@zakazky_required
-def kniha_ccs_import_onedrive():
-    j = request.get_json(silent=True) or {}
-    obsah = onedrive_service.stahni(j.get("drive_id"), j.get("item_id"))
-    if not obsah:
-        return jsonify({"radky": [], "chyba": "Soubor se nepodařilo stáhnout z OneDrive."})
-    return jsonify(_doplň_vozidla(_precti_ccs(obsah)))
-
-
-@bp.route("/kniha-jizd/fleet-import", methods=["POST"])
-@zakazky_required
-def kniha_fleet_import():
-    """Import vozidel z nahraného 'Souhrn aut.xlsx'."""
-    soubor = request.files.get("soubor")
-    if not soubor or not soubor.filename:
-        flash("Nevybral jsi soubor.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    vysl = fleet_service.parsuj_souhrn(soubor.read())
-    if vysl.get("chyba"):
-        flash(f"Fleet import: {vysl['chyba']}", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    vyt, akt, pre = fleet_service.import_vozidla(vysl["radky"])
-    flash(f"Fleet import hotov: {vyt} nových vozidel, {akt} aktualizováno"
-          + (f", {pre} bez SPZ přeskočeno" if pre else "") + ".", "info")
-    return redirect(url_for("main.kniha_jizd"))
-
-
-@bp.route("/kniha-jizd/fleet-slozka", methods=["POST"])
-@zakazky_required
-def kniha_fleet_slozka():
-    _uloz_nastaveni("kniha_fleet_slozka", request.form.get("odkaz", "").strip())
-    flash("Složka Fleet uložena." if request.form.get("odkaz", "").strip() else "Odkaz odebrán.", "info")
-    return redirect(url_for("main.kniha_jizd"))
-
-
-@bp.route("/kniha-jizd/fleet-import-onedrive", methods=["POST"])
-@zakazky_required
-def kniha_fleet_import_onedrive():
-    """Najde 'Souhrn aut.xlsx' v napojené Fleet složce a naimportuje vozidla."""
-    odkaz = _nastaveni("kniha_fleet_slozka")
-    if not (odkaz and onedrive_service.je_nakonfigurovano()):
-        flash("Není napojená Fleet složka na OneDrive.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    ds = onedrive_service.vsechny_soubory(odkaz)
-    soubor = next((s for s in (ds or {}).get("soubory", [])
-                   if "souhrn" in s["nazev"].lower() and s["nazev"].lower().endswith(".xlsx")), None)
-    if not soubor:
-        flash("Ve složce Fleet nebyl nalezen soubor 'Souhrn aut.xlsx'.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    obsah = onedrive_service.stahni(ds["drive_id"], soubor["id"])
-    if not obsah:
-        flash("Soubor se nepodařilo stáhnout z OneDrive.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    vysl = fleet_service.parsuj_souhrn(obsah)
-    if vysl.get("chyba"):
-        flash(f"Fleet import: {vysl['chyba']}", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    vyt, akt, pre = fleet_service.import_vozidla(vysl["radky"])
-    flash(f"Fleet import z OneDrive hotov: {vyt} nových, {akt} aktualizováno"
-          + (f", {pre} bez SPZ přeskočeno" if pre else "") + ".", "info")
-    return redirect(url_for("main.kniha_jizd"))
 
 
 @bp.route("/kniha-jizd/tankovani-uloz", methods=["POST"])
@@ -976,45 +891,19 @@ def kniha_export(id):
     except (ValueError, TypeError):
         flash("Neplatné období pro export.", "error")
         return redirect(url_for("main.kniha_jizd"))
+    from ..models import Tankovani
     jizdy = Jizda.query.filter_by(vozidlo_id=id, rok=rok, mesic=mesic)\
         .order_by(Jizda.datum, Jizda.id).all()
     if not jizdy:
         flash("Za toto období nejsou žádné jízdy k exportu.", "error")
         return redirect(url_for("main.kniha_jizd"))
-    sz, sk = _km_na_zacatku_konci(v, rok, mesic)
-    data = kniha_export_service.export_xlsx(v, rok, mesic, jizdy, sz, sk)
+    tank = [t for t in Tankovani.query.filter_by(vozidlo_id=id).all()
+            if t.datum and t.datum.year == rok and t.datum.month == mesic]
+    sz, _sk = _km_na_zacatku_konci(v, rok, mesic)
+    data = kniha_export_service.export_xlsx(v, rok, mesic, jizdy, tank, sz)
     nazev = f"Kniha_jizd_{v.spz.replace(' ', '')}_{rok}-{mesic:02d}.xlsx"
     return send_file(io.BytesIO(data), as_attachment=True, download_name=nazev,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-
-@bp.route("/kniha-jizd/vozidlo/<int:id>/export-onedrive", methods=["POST"])
-@zakazky_required
-def kniha_export_onedrive(id):
-    """Vygeneruje Excel knihy jízd a uloží ho do napojené Fleet/CCS složky na OneDrive."""
-    from ..models import Vozidlo, Jizda
-    v = Vozidlo.query.get_or_404(id)
-    try:
-        rok, mesic = (int(x) for x in request.form.get("obdobi", "").split("-"))
-    except (ValueError, TypeError):
-        flash("Neplatné období pro export.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    odkaz = _nastaveni("kniha_fleet_slozka") or _nastaveni("kniha_ccs_slozka")
-    if not (odkaz and onedrive_service.je_nakonfigurovano()):
-        flash("Není napojená OneDrive složka pro export.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    jizdy = Jizda.query.filter_by(vozidlo_id=id, rok=rok, mesic=mesic)\
-        .order_by(Jizda.datum, Jizda.id).all()
-    if not jizdy:
-        flash("Za toto období nejsou žádné jízdy k exportu.", "error")
-        return redirect(url_for("main.kniha_jizd"))
-    sz, sk = _km_na_zacatku_konci(v, rok, mesic)
-    data = kniha_export_service.export_xlsx(v, rok, mesic, jizdy, sz, sk)
-    nazev = f"Kniha_jizd_{v.spz.replace(' ', '')}_{rok}-{mesic:02d}.xlsx"
-    ok = onedrive_service.nahraj(odkaz, nazev, data)
-    flash(f"Kniha jízd {nazev} uložena na OneDrive." if ok
-          else "Uložení na OneDrive se nezdařilo.", "info" if ok else "error")
-    return redirect(url_for("main.kniha_jizd"))
 
 
 @bp.route("/kniha-jizd/tankovani-smazat-vse", methods=["POST"])
@@ -1089,6 +978,7 @@ def vozidlo_novy():
         tp = 0
     db.session.add(Vozidlo(spz=spz, model=request.form.get("model", "").strip(),
                            palivo=request.form.get("palivo", "nafta"), spotreba=spotreba,
+                           ridic=request.form.get("ridic", "").strip() or None,
                            tachometr_pocatek=tp, domovska_adresa=request.form.get("domovska_adresa", "").strip()))
     db.session.commit()
     flash("Vozidlo přidáno.", "info")
@@ -1102,6 +992,7 @@ def vozidlo_upravit(id):
     v = Vozidlo.query.get_or_404(id)
     v.model = request.form.get("model", v.model).strip()
     v.palivo = request.form.get("palivo", v.palivo)
+    v.ridic = request.form.get("ridic", "").strip() or None
     v.domovska_adresa = request.form.get("domovska_adresa", "").strip()
     try:
         v.spotreba = float(request.form.get("spotreba", "").replace(",", ".")) if request.form.get("spotreba") else None
