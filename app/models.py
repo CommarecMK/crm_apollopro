@@ -138,6 +138,8 @@ class Vozidlo(db.Model):
     najem_do       = db.Column(db.Date)             # konec nájmu
     splatka        = db.Column(db.Float)            # měsíční splátka bez DPH
     najezd_limit   = db.Column(db.Integer)          # nasmlouvaný nájezd celkem (km)
+    cena_prejezd_km = db.Column(db.Float)           # poplatek za přečerpané km (Kč/km bez DPH)
+    cena_neujete_km = db.Column(db.Float)           # poplatek za neujeté km (Kč/km bez DPH)
     tachometry = db.relationship("TachometrStav", backref="vozidlo", lazy=True,
                                  cascade="all, delete-orphan")
 

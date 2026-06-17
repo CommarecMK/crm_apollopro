@@ -729,9 +729,52 @@ def kniha_jizd():
             km_do = next_servis - predchozi
             servis_stav = "po" if km_do <= 0 else ("blizko" if km_do <= 1000 else "ok")
         stk_dni = (v.stk_do - date.today()).days if v.stk_do else None
+        # PHM (palivo): litry pro spotřebu, Kč pro náklady; vše z tankování (CCS/karta/historie)
+        vsechna_tank = Tankovani.query.filter_by(vozidlo_id=v.id).all()
+        phm = [t for t in vsechna_tank if t.kategorie != "ostatni"]
+        litry_tot = sum((t.litry or 0) for t in phm if t.litry)
+        castka_tot = sum((t.castka or 0) for t in phm if t.castka)
+        mesice_tank = {(t.datum.year, t.datum.month) for t in phm if t.datum}
+        km_tot = sum((j.km or 0) for j in jzy)
+        spotreba_vyp = round(litry_tot / km_tot * 100, 1) if (km_tot > 0 and litry_tot > 0) else None
+        phm_mes = round(castka_tot / len(mesice_tank)) if mesice_tank else None
+
+        # projekce nájezdu ke konci leasingu + doplatek za přejezd / neujeté km
+        prejezd = None
+        if v.najem_od and v.najem_do and v.najezd_limit:
+            total_dnu = (v.najem_do - v.najem_od).days
+            uplynulo = (dnes - v.najem_od).days
+            ujeto = max(predchozi - (v.tachometr_pocatek or 0), 0)
+            if total_dnu > 0 and uplynulo > 7 and ujeto > 0:
+                projekce = round(ujeto / min(uplynulo, total_dnu) * total_dnu)
+                rozdil = projekce - v.najezd_limit
+                lease_mes = max(total_dnu / 30.44, 1)
+                if rozdil > 0:
+                    naklad = rozdil * (v.cena_prejezd_km or 0)
+                    prejezd = {"stav": "over", "projekce": projekce, "rozdil": rozdil,
+                               "doplatek": round(naklad), "doplatek_dph": round(naklad * 1.21),
+                               "mesicne": round(naklad / lease_mes) if v.cena_prejezd_km else None,
+                               "sazba": v.cena_prejezd_km}
+                else:
+                    naklad = -rozdil * (v.cena_neujete_km or 0)
+                    prejezd = {"stav": "under", "projekce": projekce, "rozdil": rozdil,
+                               "doplatek": round(naklad), "doplatek_dph": round(naklad * 1.21),
+                               "mesicne": round(naklad / lease_mes) if v.cena_neujete_km else None,
+                               "sazba": v.cena_neujete_km}
+
+        # měsíční provoz: nájem (splátka) + PHM/měs + případný přejezd rozpuštěný na měsíc
+        provoz = None
+        if v.splatka or phm_mes:
+            slozky = {"najem": round(v.splatka) if v.splatka else 0,
+                      "phm": phm_mes or 0,
+                      "prejezd": (prejezd["mesicne"] or 0) if (prejezd and prejezd["stav"] == "over" and prejezd.get("mesicne")) else 0}
+            provoz = {"celkem": slozky["najem"] + slozky["phm"] + slozky["prejezd"], **slozky}
+
         data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank,
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
-                     "stk_dni": stk_dni, "mesice_hist": mesice_hist})
+                     "stk_dni": stk_dni, "mesice_hist": mesice_hist,
+                     "spotreba_vyp": spotreba_vyp, "litry_tot": round(litry_tot), "km_tot": round(km_tot),
+                     "prejezd": prejezd, "provoz": provoz})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
@@ -1074,10 +1117,16 @@ def vozidlo_upravit(id):
     v.najem_od = _date("najem_od")
     v.najem_do = _date("najem_do")
     v.najezd_limit = _int("najezd_limit")
-    try:
-        v.splatka = float(request.form.get("splatka", "").replace(" ", "").replace(",", ".")) if request.form.get("splatka") else None
-    except ValueError:
-        pass
+
+    def _float(pole):
+        val = (request.form.get(pole, "") or "").replace(" ", "").replace(",", ".")
+        try:
+            return float(val) if val else None
+        except ValueError:
+            return getattr(v, pole)
+    v.splatka = _float("splatka")
+    v.cena_prejezd_km = _float("cena_prejezd_km")
+    v.cena_neujete_km = _float("cena_neujete_km")
     v.aktivni = bool(request.form.get("aktivni"))
     db.session.commit()
     flash("Vozidlo uloženo.", "info")

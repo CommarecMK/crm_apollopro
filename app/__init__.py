@@ -61,23 +61,24 @@ def _seed_vozidla():
     aby nepřepisoval pozdější ruční úpravy. Upsert dle SPZ — existující jen doplní."""
     from datetime import date
     from .models import Vozidlo, Nastaveni
-    PRIZNAK = "seed_vozidla_v1"
+    PRIZNAK = "seed_vozidla_v2"
     try:
         if Nastaveni.query.get(PRIZNAK):
             return
-        # SPZ, model, palivo, splátka, nájem_od, nájem_do, nájezd_limit, servis_km, VIN, řidič
+        # SPZ, model, palivo, splátka, nájem_od, nájem_do, nájezd_limit, servis_km, VIN, řidič,
+        # cena přečerpané km, cena neujeté km (Kč/km bez DPH – z leasingových smluv)
         data = [
-            ("1AE N958", "KIA Sportage V 1.6 T-GDi (šedá)", "benzin", 11406, date(2024, 8, 13), date(2026, 8, 13), 60000, 15000, None, "Steiner"),
-            ("1AE U402", "KIA Sportage V 1.6 T-GDi (zelená)", "benzin", 9266, date(2024, 9, 29), date(2026, 9, 29), 60000, 15000, "U5YPV81BHRL280518", "Matějka"),
-            ("1AI N520", "Ford Puma 1.0 EcoBoost mHEV Titanium", "benzin", 6250, date(2025, 3, 27), date(2027, 3, 27), 40000, 30000, "WF02XXERK2RT51673", None),
-            ("1AJ E369", "VW Tayron 2.0 TDI 4MOTION R-Line", "nafta", 18766, date(2025, 6, 18), date(2027, 6, 18), 60000, 30000, "WVGZZZR47SW022175", "Komárek"),
-            ("1AJ T473", "Škoda Kodiaq (modrý)", "nafta", 11720, date(2025, 6, 26), date(2027, 6, 26), 60000, 30000, None, "Bezděk"),
-            ("1AM Z598", "KIA K4 1.6 T-GDI Exclusive (červená)", "benzin", 10042, date(2026, 2, 26), date(2028, 2, 26), 60000, 15000, "3KPFX51C0TE233772", "Hlavatý"),
-            ("1AP J946", "Škoda Kodiaq (šedá)", "nafta", 13145, date(2026, 6, 2), date(2028, 6, 2), 60000, 30000, None, "Matějka"),
+            ("1AE N958", "KIA Sportage V 1.6 T-GDi (šedá)", "benzin", 11406, date(2024, 8, 13), date(2026, 8, 13), 60000, 15000, None, "Steiner", 3.70, 1.10),
+            ("1AE U402", "KIA Sportage V 1.6 T-GDi (zelená)", "benzin", 9266, date(2024, 9, 29), date(2026, 9, 29), 60000, 15000, "U5YPV81BHRL280518", "Matějka", 3.60, 1.00),
+            ("1AI N520", "Ford Puma 1.0 EcoBoost mHEV Titanium", "benzin", 6250, date(2025, 3, 27), date(2027, 3, 27), 40000, 30000, "WF02XXERK2RT51673", None, None, None),
+            ("1AJ E369", "VW Tayron 2.0 TDI 4MOTION R-Line", "nafta", 18766, date(2025, 6, 18), date(2027, 6, 18), 60000, 30000, "WVGZZZR47SW022175", "Komárek", 6.50, 1.90),
+            ("1AJ T473", "Škoda Kodiaq (modrý)", "nafta", 11720, date(2025, 6, 26), date(2027, 6, 26), 60000, 30000, None, "Bezděk", 5.30, 1.50),
+            ("1AM Z598", "KIA K4 1.6 T-GDI Exclusive (červená)", "benzin", 10042, date(2026, 2, 26), date(2028, 2, 26), 60000, 15000, "3KPFX51C0TE233772", "Hlavatý", 3.10, 0.90),
+            ("1AP J946", "Škoda Kodiaq (šedá)", "nafta", 13145, date(2026, 6, 2), date(2028, 6, 2), 60000, 30000, None, "Matějka", 6.20, 1.80),
         ]
         existujici = {(v.spz or "").replace(" ", "").upper(): v for v in Vozidlo.query.all()}
         zalozeno = doplneno = 0
-        for spz, model, palivo, splatka, n_od, n_do, najezd, servis, vin, ridic in data:
+        for spz, model, palivo, splatka, n_od, n_do, najezd, servis, vin, ridic, c_prej, c_neuj in data:
             v = existujici.get(spz.replace(" ", "").upper())
             novy = v is None
             if novy:
@@ -90,7 +91,8 @@ def _seed_vozidla():
                 v.palivo = palivo
             for pole, hod in (("splatka", splatka), ("najem_od", n_od), ("najem_do", n_do),
                               ("najezd_limit", najezd), ("servis_interval_km", servis),
-                              ("vin", vin), ("ridic", ridic)):
+                              ("vin", vin), ("ridic", ridic),
+                              ("cena_prejezd_km", c_prej), ("cena_neujete_km", c_neuj)):
                 if getattr(v, pole) in (None, "") and hod is not None:
                     setattr(v, pole, hod)
             zalozeno += novy
@@ -112,7 +114,7 @@ def _seed_historie_jizd():
     import os
     import json
     from datetime import datetime
-    from .models import Vozidlo, Jizda, TachometrStav, Nastaveni
+    from .models import Vozidlo, Jizda, TachometrStav, Tankovani, Nastaveni
     PRIZNAK = "seed_historie_jizd_v3"
     cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_historie.json")
     try:
@@ -121,6 +123,8 @@ def _seed_historie_jizd():
         with open(cesta, encoding="utf-8") as f:
             zaznamy = json.load(f)
         vozidla = {(v.spz or "").replace(" ", "").upper(): v for v in Vozidlo.query.all()}
+        # historickou palivovou stopu vlastní jen seed → před re-syncem smaž (CCS/karta zůstanou)
+        Tankovani.query.filter_by(zdroj="historie").delete()
         naimport = 0
         for z in zaznamy:
             v = vozidla.get((z["spz"] or "").replace(" ", "").upper())
@@ -147,6 +151,12 @@ def _seed_historie_jizd():
                                      odkud=(j.get("odkud") or "")[:300], kam=(j.get("kam") or "")[:300],
                                      km=float(j.get("km") or 0),
                                      ucel=(j.get("ucel") or "")[:300], soukroma=False))
+                # historická palivová stopa (litry/Kč zapsané u jízdy v excelu) → pro výpočet spotřeby
+                if j.get("litry") and d:
+                    db.session.add(Tankovani(vozidlo_id=v.id, datum=d, misto=(j.get("kam") or "")[:300],
+                                             litry=float(j["litry"]),
+                                             castka=(float(j["kc"]) if j.get("kc") else None),
+                                             kategorie="phm", zdroj="historie"))
             # stav tachometru na konci měsíce
             if z.get("tacho_konec") is not None:
                 ts = TachometrStav.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).first()
@@ -249,6 +259,7 @@ def _inline_migrace():
                 "najem_od": "DATE", "najem_do": "DATE",
                 "splatka": "FLOAT", "najezd_limit": "INTEGER",
                 "ridic": "VARCHAR(120)",
+                "cena_prejezd_km": "FLOAT", "cena_neujete_km": "FLOAT",
             },
             "tankovani": {
                 "druh": "VARCHAR(60)", "kategorie": "VARCHAR(20) DEFAULT 'phm'",
