@@ -135,6 +135,8 @@ def _inline_migrace():
                 "vin": "VARCHAR(40)", "rok_vyroby": "INTEGER",
                 "servis_interval_km": "INTEGER", "posledni_servis_km": "INTEGER",
                 "posledni_servis_datum": "DATE", "stk_do": "DATE",
+                "najem_od": "DATE", "najem_do": "DATE",
+                "splatka": "FLOAT", "najezd_limit": "INTEGER",
             },
             "tankovani": {
                 "druh": "VARCHAR(60)", "kategorie": "VARCHAR(20) DEFAULT 'phm'",

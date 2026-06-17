@@ -132,6 +132,11 @@ class Vozidlo(db.Model):
     posledni_servis_km    = db.Column(db.Integer)   # stav tachometru při posledním servisu
     posledni_servis_datum = db.Column(db.Date)
     stk_do         = db.Column(db.Date)             # platnost STK
+    # Leasing / nájem (z Fleet – Souhrn aut.xlsx)
+    najem_od       = db.Column(db.Date)             # začátek nájmu
+    najem_do       = db.Column(db.Date)             # konec nájmu
+    splatka        = db.Column(db.Float)            # měsíční splátka bez DPH
+    najezd_limit   = db.Column(db.Integer)          # nasmlouvaný nájezd celkem (km)
     tachometry = db.relationship("TachometrStav", backref="vozidlo", lazy=True,
                                  cascade="all, delete-orphan")
 
@@ -144,6 +149,22 @@ class TachometrStav(db.Model):
     rok        = db.Column(db.Integer, nullable=False)
     mesic      = db.Column(db.Integer, nullable=False)
     stav_km    = db.Column(db.Integer, nullable=False, default=0)
+
+
+class Jizda(db.Model):
+    """Jednotlivá jízda v knize jízd (vygenerovaná AI nebo ruční)."""
+    __tablename__ = "jizda"
+    id         = db.Column(db.Integer, primary_key=True)
+    vozidlo_id = db.Column(db.Integer, db.ForeignKey("vozidlo.id"), nullable=False, index=True)
+    rok        = db.Column(db.Integer, index=True)
+    mesic      = db.Column(db.Integer, index=True)
+    datum      = db.Column(db.Date)
+    odkud      = db.Column(db.String(300))
+    kam        = db.Column(db.String(300))
+    km         = db.Column(db.Float, default=0)
+    ucel       = db.Column(db.String(300))
+    soukroma   = db.Column(db.Boolean, default=False)
+    vozidlo    = db.relationship("Vozidlo")
 
 
 class Tankovani(db.Model):

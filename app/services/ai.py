@@ -184,6 +184,42 @@ def nacti_ccs_fakturu(pdf_bytes):
     return {"radky": radky, "chyba": None}
 
 
+def generuj_jizdy(vozidlo_nazev, domov, rok, mesic, cil_km, tankovani, vzdalenosti):
+    """Vygeneruje návrh jízd pro daný měsíc. Vrací {jizdy:[{datum,odkud,kam,km,ucel}], chyba}."""
+    if not ma_ai():
+        return {"jizdy": [], "chyba": "Chybí firemní ANTHROPIC_API_KEY."}
+    kotvy = "\n".join(f"- {t['datum']}: tankováno v {t['misto']}" for t in tankovani if t.get("misto"))
+    znam = "\n".join(f"- {d['a']} → {d['b']}: {d['km']} km" for d in vzdalenosti if d.get("km"))
+    system = ("Jsi asistent, který sestavuje firemní knihu jízd. Na základě known bodů (kde auto tankovalo) "
+              "a domovské adresy sestav realistické pracovní jízdy za daný měsíc. Pravidla: "
+              "jízdy začínají a končí na domovské adrese; projeď přes místa tankování v jejich datech; "
+              "součet km se má co nejvíc blížit cílovému nájezdu; vzdálenosti používej reálné (níže máš known km), "
+              "u zbytku odhadni rozumně. Vymysli věrohodné účely (jednání u klienta, servis, doprava materiálu…). "
+              "Vrať POUZE JSON pole: "
+              '[{"datum":"YYYY-MM-DD","odkud":"místo","kam":"místo","km":číslo,"ucel":"účel cesty"}]. '
+              "Bez dalšího textu.")
+    user = (f"Vozidlo: {vozidlo_nazev}\nDomovská adresa: {domov or '(neuvedena)'}\n"
+            f"Měsíc: {mesic}/{rok}\nCílový nájezd za měsíc: {cil_km} km\n\n"
+            f"Místa tankování (kotvy):\n{kotvy or '(žádná)'}\n\nZnámé vzdálenosti:\n{znam or '(žádné)'}")
+    odp, chyba = _claude(system, user, max_tokens=4000)
+    if not odp:
+        return {"jizdy": [], "chyba": f"AI chyba: {chyba}"}
+    data = _parse_json(odp)
+    if not isinstance(data, list):
+        return {"jizdy": [], "chyba": "AI nevrátila platný seznam jízd."}
+    jizdy = []
+    for j in data:
+        if not isinstance(j, dict):
+            continue
+        try:
+            km = round(float(str(j.get("km", 0)).replace(",", ".")), 1)
+        except (ValueError, TypeError):
+            km = 0
+        jizdy.append({"datum": (j.get("datum") or "")[:10], "odkud": str(j.get("odkud") or "")[:300],
+                      "kam": str(j.get("kam") or "")[:300], "km": km, "ucel": str(j.get("ucel") or "")[:300]})
+    return {"jizdy": jizdy, "chyba": None}
+
+
 def navrhni_slozku(filename, cesty):
     """Navrhne složku pro soubor. Vrací {cesta, duvod}."""
     if not filename or not cesty or not ma_ai():

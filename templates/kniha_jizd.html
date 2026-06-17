@@ -11,7 +11,7 @@
     <form id="ccsForm" data-noload style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="file" name="soubor" accept=".pdf" required style="font-size:13px">
-      <button class="btn" type="submit">Načíst fakturu (AI)</button>
+      <button class="btn" type="submit">Načíst fakturu</button>
       <span id="ccsStav" class="muted" style="font-size:13px"></span>
     </form>
     <form method="post" action="{{ url_for('main.kniha_tankovani_smazat_vse') }}" onsubmit="return confirm('Opravdu smazat VŠECHNA tankování?')">
@@ -37,13 +37,39 @@
     <tbody>
       {% for s in ccs_soubory %}
       <tr><td>{{ s.nazev }}</td><td class="muted" style="font-size:12px">{{ s.zmeneno or '' }}</td>
-        <td style="text-align:right"><button class="btn" type="button" data-id="{{ s.id }}" onclick="ccsZOneDrive(this)" style="font-size:12px;padding:6px 12px">Načíst (AI)</button></td></tr>
+        <td style="text-align:right"><button class="btn" type="button" data-id="{{ s.id }}" onclick="ccsZOneDrive(this)" style="font-size:12px;padding:6px 12px">Načíst</button></td></tr>
       {% endfor %}
     </tbody>
   </table></div>
   {% elif ccs_odkaz %}<p class="muted" style="font-size:13px">Ve složce nejsou žádná PDF (nebo se nepodařilo načíst).</p>{% endif %}
 </div>
 {% endif %}
+
+<!-- Import vozidel z Fleet (Souhrn aut.xlsx) -->
+<div class="stat" style="margin-bottom:18px">
+  <h3 class="druk" style="font-size:14px;color:var(--navy);margin-bottom:8px">Import vozidel z Fleet (Souhrn aut.xlsx)</h3>
+  <p class="muted" style="font-size:12px;margin:0 0 10px">Naimportuje/aktualizuje vozidla podle SPZ (model, splátka, nájem, nájezd, servisní interval). Existující vozidla jen doplní, nepřepíše ručně zadané km.</p>
+  <form method="post" action="{{ url_for('main.kniha_fleet_import') }}" enctype="multipart/form-data" data-noload
+        style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="soubor" accept=".xlsx" required style="font-size:13px">
+    <button class="btn" type="submit">Naimportovat ze souboru</button>
+  </form>
+  {% if onedrive_ok %}
+  <form method="post" action="{{ url_for('main.kniha_fleet_slozka') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="url" name="odkaz" value="{{ fleet_odkaz }}" placeholder="Odkaz na SharePoint/OneDrive složku Fleet (obsahuje Souhrn aut.xlsx)"
+           style="flex:1;min-width:320px;padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px">
+    <button class="btn btn-ghost" type="submit">Uložit složku</button>
+  </form>
+  {% if fleet_odkaz %}
+  <form method="post" action="{{ url_for('main.kniha_fleet_import_onedrive') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn" type="submit" style="font-size:13px">Naimportovat z OneDrive (najde Souhrn aut.xlsx)</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
 
 <div id="ccsModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:86vh;overflow:auto;padding:20px 22px">
@@ -88,7 +114,7 @@
     vysl.textContent=''; stav.textContent=''; modal.style.display='flex';
   }
   form.addEventListener('submit',async e=>{
-    e.preventDefault(); const b=form.querySelector('button[type=submit]'); b.disabled=true; const pv=b.textContent; b.textContent='AI čte fakturu…'; stav.textContent='';
+    e.preventDefault(); const b=form.querySelector('button[type=submit]'); b.disabled=true; const pv=b.textContent; b.textContent='Čtu fakturu…'; stav.textContent='';
     try{
       const r=await fetch("{{ url_for('main.kniha_ccs_import') }}",{method:'POST',headers:{'X-CSRFToken':CSRF},body:new FormData(form)});
       zobrazReviz(await r.json());
@@ -96,7 +122,7 @@
     finally{b.disabled=false;b.textContent=pv;}
   });
   window.ccsZOneDrive=async function(btn){
-    btn.disabled=true; const pv=btn.textContent; btn.textContent='AI čte…'; stav.textContent='Načítám z OneDrive…';
+    btn.disabled=true; const pv=btn.textContent; btn.textContent='Čtu…'; stav.textContent='Načítám z OneDrive…';
     try{
       const r=await fetch("{{ url_for('main.kniha_ccs_import_onedrive') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({drive_id:"{{ ccs_drive }}",item_id:btn.dataset.id})});
       zobrazReviz(await r.json());
@@ -118,6 +144,90 @@
       const r=await fetch("{{ url_for('main.kniha_tankovani_uloz') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({radky})});
       await r.json(); location.reload();
     }catch(err){vysl.style.color='var(--red)';vysl.textContent='Chyba spojení.';b.disabled=false;b.textContent='Uložit vybrané';}
+  });
+})();
+</script>
+
+<!-- Modal: generování jízd -->
+<div id="genModal" style="display:none;position:fixed;inset:0;background:rgba(5,11,21,.55);z-index:100;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:1040px;width:100%;max-height:88vh;overflow:auto;padding:20px 22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h3 class="druk" style="color:var(--navy);font-size:18px;margin:0">Návrh jízd — zkontroluj, uprav a ulož</h3>
+      <button type="button" id="genZavri" style="border:none;background:none;font-size:24px;cursor:pointer;color:#889">×</button>
+    </div>
+    <p id="genInfo" class="muted" style="font-size:13px;margin:0 0 10px"></p>
+    <div class="tabulka"><table>
+      <thead><tr><th>Datum</th><th>Odkud</th><th>Kam</th><th>Účel</th><th style="text-align:right">Km</th><th>Soukromá</th><th></th></tr></thead>
+      <tbody id="genRadky"></tbody>
+    </table></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <button type="button" class="btn btn-ghost" id="genPridat" style="font-size:13px">+ Přidat řádek</button>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span id="genSoucet" style="font-size:13px;font-weight:600"></span>
+        <button type="button" class="btn btn-ghost" id="genZrusit">Zrušit</button>
+        <button type="button" class="btn" id="genUloz">Uložit knihu jízd</button>
+      </div>
+    </div>
+    <div id="genVysledek" style="font-size:13px;margin-top:8px"></div>
+  </div>
+</div>
+<script>
+(function(){
+  const CSRF="{{ csrf_token() }}";
+  const modal=document.getElementById('genModal'), tbody=document.getElementById('genRadky'),
+        info=document.getElementById('genInfo'), soucetEl=document.getElementById('genSoucet'),
+        vysl=document.getElementById('genVysledek');
+  const istyl="padding:5px 7px;border:1px solid var(--n7);border-radius:6px;font-family:inherit;font-size:13px";
+  let CTX={vid:null,rok:null,mesic:null,cil:0};
+  function esc(s){return (s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function rowHTML(j){j=j||{};return '<tr>'
+    +'<td><input class="g-datum" value="'+esc(j.datum)+'" placeholder="RRRR-MM-DD" style="'+istyl+';width:115px"></td>'
+    +'<td><input class="g-odkud" value="'+esc(j.odkud)+'" style="'+istyl+';width:100%"></td>'
+    +'<td><input class="g-kam" value="'+esc(j.kam)+'" style="'+istyl+';width:100%"></td>'
+    +'<td><input class="g-ucel" value="'+esc(j.ucel)+'" style="'+istyl+';width:100%"></td>'
+    +'<td style="text-align:right"><input class="g-km" value="'+esc(j.km)+'" oninput="window._genSum()" style="'+istyl+';width:70px;text-align:right"></td>'
+    +'<td style="text-align:center"><input type="checkbox" class="g-souk"'+(j.soukroma?' checked':'')+'></td>'
+    +'<td style="text-align:right"><button type="button" onclick="this.closest(\'tr\').remove();window._genSum()" style="border:none;background:none;color:var(--red);cursor:pointer">×</button></td></tr>';}
+  window._genSum=function(){
+    let s=0; tbody.querySelectorAll('.g-km').forEach(i=>{const v=parseFloat((i.value||'0').replace(',','.'));if(!isNaN(v))s+=v;});
+    const rozdil=Math.round((s-CTX.cil)*10)/10;
+    soucetEl.innerHTML='Součet: <b>'+Math.round(s*10)/10+'</b> km / cíl <b>'+CTX.cil+'</b> km '
+      +(Math.abs(rozdil)<0.5?'<span style="color:#1a7f43">✓</span>':'<span style="color:var(--orange)">('+(rozdil>0?'+':'')+rozdil+')</span>');
+  };
+  document.getElementById('genZavri').onclick=()=>modal.style.display='none';
+  document.getElementById('genZrusit').onclick=()=>modal.style.display='none';
+  document.getElementById('genPridat').onclick=()=>{tbody.insertAdjacentHTML('beforeend',rowHTML({}));window._genSum();};
+  window.genJizdy=async function(btn,vid){
+    const obdobi=btn.closest('.stat').querySelector('.kj-obdobi').value;
+    const [rok,mesic]=obdobi.split('-').map(Number);
+    CTX={vid:vid,rok:rok,mesic:mesic,cil:0};
+    btn.disabled=true; const pv=btn.textContent; btn.textContent='AI počítá jízdy…';
+    try{
+      const r=await fetch(btn.dataset.genurl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({obdobi})});
+      const j=await r.json();
+      if(j.chyba){alert(j.chyba);return;}
+      CTX.cil=j.cil_km||0;
+      tbody.innerHTML=(j.jizdy||[]).map(rowHTML).join('')||rowHTML({});
+      info.textContent='Cílový nájezd za '+obdobi+': '+CTX.cil+' km (z tachometru). Jízdy jsou návrh — uprav dle skutečnosti.';
+      vysl.textContent=''; window._genSum(); modal.style.display='flex';
+    }catch(err){alert('Chyba spojení při generování.');}
+    finally{btn.disabled=false;btn.textContent=pv;}
+  };
+  document.getElementById('genUloz').addEventListener('click',async(e)=>{
+    const jizdy=[];
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      jizdy.push({datum:tr.querySelector('.g-datum').value,odkud:tr.querySelector('.g-odkud').value,
+        kam:tr.querySelector('.g-kam').value,ucel:tr.querySelector('.g-ucel').value,
+        km:tr.querySelector('.g-km').value,soukroma:tr.querySelector('.g-souk').checked});
+    });
+    const b=e.target;b.disabled=true;b.textContent='Ukládám…';
+    try{
+      const r=await fetch("{{ url_for('main.kniha_jizdy_uloz') }}",{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify({vozidlo_id:CTX.vid,rok:CTX.rok,mesic:CTX.mesic,jizdy})});
+      const j=await r.json();
+      if(j.chyba){vysl.style.color='var(--red)';vysl.textContent=j.chyba;b.disabled=false;b.textContent='Uložit knihu jízd';return;}
+      location.reload();
+    }catch(err){vysl.style.color='var(--red)';vysl.textContent='Chyba spojení.';b.disabled=false;b.textContent='Uložit knihu jízd';}
   });
 })();
 </script>
@@ -190,6 +300,28 @@
   </div>
   {% endif %}
 
+  <!-- Generování jízd + export -->
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--n7);padding-top:10px">
+    <span class="druk" style="font-size:13px;color:var(--navy)">Kniha jízd:</span>
+    <select class="kj-obdobi" style="{{ istyl }};padding:7px 9px">
+      {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val == '%04d-%02d'|format(akt_rok, akt_mesic) }}>{{ popis }}</option>{% endfor %}
+    </select>
+    <button class="btn" type="button" data-genurl="{{ url_for('main.kniha_generuj_jizdy', id=d.v.id) }}"
+            onclick="genJizdy(this,{{ d.v.id }})" style="padding:7px 12px;font-size:13px">Generovat jízdy (AI)</button>
+    <button class="btn btn-ghost" type="button" data-url="{{ url_for('main.kniha_export', id=d.v.id) }}"
+            onclick="window.location=this.dataset.url+'?obdobi='+this.closest('.stat').querySelector('.kj-obdobi').value"
+            style="padding:7px 12px;font-size:13px">Stáhnout Excel</button>
+    {% if onedrive_ok %}
+    <form method="post" action="{{ url_for('main.kniha_export_onedrive', id=d.v.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="obdobi" class="kj-odrive-obdobi">
+      <button class="btn btn-ghost" type="submit" style="padding:7px 12px;font-size:13px"
+              onclick="this.form.querySelector('.kj-odrive-obdobi').value=this.closest('.stat').querySelector('.kj-obdobi').value">Uložit na OneDrive</button>
+    </form>
+    {% endif %}
+    {% if d.mesice_jizd %}<span class="muted" style="font-size:12px">uloženo: {% for r, m in d.mesice_jizd %}{{ '%02d/%04d'|format(m, r) }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
+  </div>
+
   <details style="margin-top:8px">
     <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">+ Ruční tankování (platba kartou)</summary>
     <form method="post" action="{{ url_for('main.kniha_tankovani_rucni') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
@@ -222,6 +354,10 @@
       <input type="text" name="posledni_servis_km" value="{{ d.v.posledni_servis_km or '' }}" placeholder="poslední servis (km)" style="{{ istyl }};width:140px">
       <label style="font-size:12px;color:#99a">Posl. servis<br><input type="date" name="posledni_servis_datum" value="{{ d.v.posledni_servis_datum.isoformat() if d.v.posledni_servis_datum else '' }}" style="{{ istyl }}"></label>
       <label style="font-size:12px;color:#99a">STK do<br><input type="date" name="stk_do" value="{{ d.v.stk_do.isoformat() if d.v.stk_do else '' }}" style="{{ istyl }}"></label>
+      <label style="font-size:12px;color:#99a">Nájem od<br><input type="date" name="najem_od" value="{{ d.v.najem_od.isoformat() if d.v.najem_od else '' }}" style="{{ istyl }}"></label>
+      <label style="font-size:12px;color:#99a">Nájem do<br><input type="date" name="najem_do" value="{{ d.v.najem_do.isoformat() if d.v.najem_do else '' }}" style="{{ istyl }}"></label>
+      <input type="text" name="splatka" value="{{ d.v.splatka or '' }}" placeholder="splátka bez DPH" style="{{ istyl }};width:130px">
+      <input type="text" name="najezd_limit" value="{{ d.v.najezd_limit or '' }}" placeholder="nájezd limit (km)" style="{{ istyl }};width:140px">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="aktivni" {{ 'checked' if d.v.aktivni }}> aktivní</label>
       <button class="btn btn-ghost" type="submit" style="font-size:13px">Uložit</button>
     </form>
