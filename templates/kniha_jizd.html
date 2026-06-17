@@ -2,7 +2,7 @@
 {% block content %}
 {% set istyl = "padding:9px 11px;border:1px solid var(--n7);border-radius:8px;font-family:inherit;font-size:14px;background:#fff" %}
 <h1 style="color:var(--navy);font-size:30px;margin-bottom:4px">Kniha jízd</h1>
-<p class="muted" style="margin-bottom:14px">Vozidla, tachometr, tankování (CCS i ruční). Dále: generování jízd + export do OneDrive.</p>
+<p class="muted" style="margin-bottom:14px">Nahraj fakturu → tankování se rozdělí autům. U auta zadej stav tachometru → vygeneruj jízdy (z kotev tankování + reálné historie) → stáhni cestovní příkaz. Klikni na měsíc pro stažení.</p>
 
 <!-- Import CCS faktury -->
 <div class="stat" style="margin-bottom:18px">
@@ -208,53 +208,56 @@
     </form>
   </div>
 
-  {% if d.cten %}
-  <div class="tabulka" style="margin-top:10px">
-  <table>
-    <thead><tr><th>Období</th><th style="text-align:right">Stav km</th><th style="text-align:right">Ujeto (km)</th></tr></thead>
-    <tbody>
-      {% for c in d.cten|reverse %}
-      <tr><td>{{ "%02d"|format(c.mesic) }}/{{ c.rok }}</td>
-        <td style="text-align:right">{{ "{:,.0f}".format(c.stav).replace(",", " ") }}</td>
-        <td style="text-align:right;color:var(--navy);font-weight:600">{{ "{:,.0f}".format(c.ujeto).replace(",", " ") }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {% set mes_zkr = ['','Led','Úno','Bře','Dub','Kvě','Čer','Čvc','Srp','Zář','Říj','Lis','Pro'] %}
+  <!-- Měsíční historie: klik = stáhnout cestovní příkaz -->
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;align-items:stretch">
+    {% for mh in d.mesice_hist %}
+    <a href="{{ url_for('main.kniha_export', id=d.v.id) }}?obdobi={{ '%04d-%02d'|format(mh.rok, mh.mesic) }}"
+       title="Stáhnout cestovní příkaz za {{ mes_zkr[mh.mesic] }} {{ mh.rok }}"
+       style="text-decoration:none;color:inherit;border:1px solid var(--n7);border-radius:9px;padding:7px 10px;min-width:78px;text-align:center">
+      <div style="font-size:11px;color:#889">{{ mes_zkr[mh.mesic] }} {{ mh.rok }}</div>
+      {% if mh.pocet %}<div style="font-size:13px;font-weight:700;color:var(--navy)">{{ "{:,.0f}".format(mh.km).replace(",", " ") }} km</div>
+      <div style="font-size:10px;color:var(--cyan-dark)"><i style="font-style:normal">⬇</i> příkaz{% if mh.ma_tank %} · tank{% endif %}</div>
+      {% else %}<div style="font-size:12px;color:#aab;padding-top:3px">doplnit</div>{% endif %}
+    </a>
+    {% endfor %}
+    {% if not d.mesice_hist %}<span class="muted" style="font-size:13px">Zatím žádná historie. Zadej stav tachometru a vygeneruj měsíc.</span>{% endif %}
   </div>
-  {% endif %}
 
-  {% if d.tankovani %}
-  <div class="tabulka" style="margin-top:10px">
-  <table>
-    <thead><tr><th>Tankování — datum</th><th>Místo</th><th>Druh</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th>Zdroj</th><th></th></tr></thead>
-    <tbody>
-      {% for t in d.tankovani %}
-      <tr{{ ' style=opacity:.6' if t.kategorie=='ostatni' }}><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.misto or '—' }}</td>
-        <td>{{ t.druh or '—' }}{% if t.kategorie=='ostatni' %} <span class="tag" style="background:#eef0f4;color:#667">ostatní</span>{% endif %}</td>
-        <td style="text-align:right">{{ t.litry or '' }}</td><td style="text-align:right">{{ "{:,.0f}".format(t.castka).replace(",", " ") if t.castka else '' }}</td>
-        <td>{% if t.zdroj=='karta' %}<span class="tag" style="background:#fff0e6;color:var(--orange)">karta</span>{% else %}<span class="tag">CCS</span>{% endif %}</td>
-        <td style="text-align:right"><form method="post" action="{{ url_for('main.kniha_tankovani_smazat', id=t.id) }}" onsubmit="return confirm('Smazat tankování?')" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">×</button></form></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-
-  <!-- Generování jízd + export -->
+  <!-- Vytvořit / aktualizovat měsíc -->
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--n7);padding-top:10px">
-    <span class="druk" style="font-size:13px;color:var(--navy)">Kniha jízd:</span>
+    <span class="druk" style="font-size:13px;color:var(--navy)">Měsíc:</span>
     <select class="kj-obdobi" style="{{ istyl }};padding:7px 9px">
       {% for val, popis in mesice %}<option value="{{ val }}" {{ 'selected' if val == '%04d-%02d'|format(akt_rok, akt_mesic) }}>{{ popis }}</option>{% endfor %}
     </select>
     <button class="btn" type="button" data-genurl="{{ url_for('main.kniha_generuj_jizdy', id=d.v.id) }}"
-            onclick="genJizdy(this,{{ d.v.id }})" style="padding:7px 12px;font-size:13px">Generovat jízdy (AI)</button>
+            onclick="genJizdy(this,{{ d.v.id }})" style="padding:7px 12px;font-size:13px">Generovat jízdy</button>
     <button class="btn btn-ghost" type="button" data-url="{{ url_for('main.kniha_export', id=d.v.id) }}"
             onclick="window.location=this.dataset.url+'?obdobi='+this.closest('.stat').querySelector('.kj-obdobi').value"
-            style="padding:7px 12px;font-size:13px">Stáhnout Excel</button>
-    {% if d.mesice_jizd %}<span class="muted" style="font-size:12px">uloženo: {% for r, m in d.mesice_jizd %}{{ '%02d/%04d'|format(m, r) }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
+            style="padding:7px 12px;font-size:13px">Stáhnout cestovní příkaz</button>
   </div>
+
+  {% if d.tankovani %}
+  <details style="margin-top:10px">
+    <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">Tankování ({{ d.tankovani|length }})</summary>
+    <div class="tabulka" style="margin-top:8px">
+    <table>
+      <thead><tr><th>Datum</th><th>Místo</th><th>Druh</th><th style="text-align:right">Litry</th><th style="text-align:right">Kč</th><th>Zdroj</th><th></th></tr></thead>
+      <tbody>
+        {% for t in d.tankovani %}
+        <tr{{ ' style=opacity:.6' if t.kategorie=='ostatni' }}><td>{{ t.datum.strftime('%d.%m.%Y') if t.datum else '—' }}</td><td>{{ t.misto or '—' }}</td>
+          <td>{{ t.druh or '—' }}{% if t.kategorie=='ostatni' %} <span class="tag" style="background:#eef0f4;color:#667">ostatní</span>{% endif %}</td>
+          <td style="text-align:right">{{ t.litry or '' }}</td><td style="text-align:right">{{ "{:,.0f}".format(t.castka).replace(",", " ") if t.castka else '' }}</td>
+          <td>{% if t.zdroj=='karta' %}<span class="tag" style="background:#fff0e6;color:var(--orange)">karta</span>{% else %}<span class="tag">CCS</span>{% endif %}</td>
+          <td style="text-align:right"><form method="post" action="{{ url_for('main.kniha_tankovani_smazat', id=t.id) }}" onsubmit="return confirm('Smazat tankování?')" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px">×</button></form></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </details>
+  {% endif %}
 
   <details style="margin-top:8px">
     <summary style="cursor:pointer;font-size:13px;color:var(--cyan-dark)">+ Ruční tankování (platba kartou)</summary>

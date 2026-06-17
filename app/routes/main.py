@@ -129,7 +129,7 @@ from ..services import (clockify, firmy as firmy_service, snapshot,
                         dokumenty as dokumenty_service, ai as ai_service,
                         embeddings as embeddings_service, extrakce as extrakce_service,
                         osm as osm_service, ccs as ccs_service,
-                        kniha_export as kniha_export_service)
+                        kniha_export as kniha_export_service, jizdy_gen as jizdy_gen_service)
 
 bp = Blueprint("main", __name__)
 
@@ -695,7 +695,21 @@ def kniha_jizd():
             predchozi = t.stav_km
         tank = Tankovani.query.filter_by(vozidlo_id=v.id).order_by(Tankovani.datum.desc()).limit(30).all()
         from ..models import Jizda
-        mesice_jizd = sorted({(j.rok, j.mesic) for j in Jizda.query.filter_by(vozidlo_id=v.id).all()}, reverse=True)
+        # historie po měsících: km (součet jízd), počet jízd, stav tachometru, zda má tankování
+        jzy = Jizda.query.filter_by(vozidlo_id=v.id).all()
+        km_mes, pocet_mes = {}, {}
+        for j in jzy:
+            k = (j.rok, j.mesic)
+            km_mes[k] = km_mes.get(k, 0) + (j.km or 0)
+            pocet_mes[k] = pocet_mes.get(k, 0) + 1
+        stav_mes = {(t.rok, t.mesic): t.stav_km for t in cten}
+        tank_mes = {(t.datum.year, t.datum.month)
+                    for t in Tankovani.query.filter_by(vozidlo_id=v.id).all()
+                    if t.datum and t.kategorie != "ostatni"}
+        klice = sorted(set(km_mes) | set(stav_mes), reverse=True)
+        mesice_hist = [{"rok": r, "mesic": m, "km": round(km_mes.get((r, m), 0)),
+                        "pocet": pocet_mes.get((r, m), 0), "stav": stav_mes.get((r, m)),
+                        "ma_tank": (r, m) in tank_mes} for r, m in klice]
         # hlídání servisu dle nájezdu
         next_servis = km_do = servis_stav = None
         if v.servis_interval_km and v.posledni_servis_km is not None:
@@ -705,7 +719,7 @@ def kniha_jizd():
         stk_dni = (v.stk_do - date.today()).days if v.stk_do else None
         data.append({"v": v, "cten": radky, "posledni": predchozi, "tankovani": tank,
                      "next_servis": next_servis, "km_do": km_do, "servis_stav": servis_stav,
-                     "stk_dni": stk_dni, "mesice_jizd": mesice_jizd})
+                     "stk_dni": stk_dni, "mesice_hist": mesice_hist})
     nezarazene = Tankovani.query.filter_by(vozidlo_id=None).order_by(Tankovani.datum.desc()).all()
     now = datetime.now(timezone.utc)
     return render_template("kniha_jizd.html", data=data, mesice=_seznam_mesicu(),
@@ -830,13 +844,8 @@ def kniha_generuj_jizdy(id):
             for t in Tankovani.query.filter_by(vozidlo_id=id).all()
             if t.datum and t.datum.year == rok and t.datum.month == mesic and t.kategorie != "ostatni" and t.misto]
     tank.sort(key=lambda x: x["datum"])
-    # vzdálenosti přes OSM: domov → kotvy → domov
-    domov = v.domovska_adresa or ""
-    mista = ([domov] if domov else []) + [t["misto"] for t in tank] + ([domov] if domov else [])
-    vzdal = osm_service.vzdalenosti_mezi(mista) if len(mista) > 1 else []
-    vysledek = ai_service.generuj_jizdy(f"{v.spz} {v.model or ''}".strip(), domov, rok, mesic, cil_km, tank, vzdal)
-    vysledek["cil_km"] = cil_km
-    vysledek["soucet"] = round(sum(j["km"] for j in vysledek.get("jizdy", [])), 1)
+    # deterministický generátor: kotvy (tankování) + reálná historie vozidla + OSM
+    vysledek = jizdy_gen_service.navrhni(v, rok, mesic, cil_km, tank)
     return jsonify(vysledek)
 
 

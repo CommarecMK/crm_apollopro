@@ -50,6 +50,7 @@ def create_app():
         _bootstrap_admin()        # založí/aktualizuje hlavního admina z env
         _reset_indexace()         # po restartu uvolní zaseknuté příznaky indexace
         _seed_vozidla()           # jednorázově naplní vozový park z dat Fleet
+        _seed_historie_jizd()     # jednorázově naimportuje historii jízd 2026
 
     return app
 
@@ -102,6 +103,65 @@ def _seed_vozidla():
     except Exception as e:
         db.session.rollback()
         print(f"[seed] vozidla: {e}")
+
+
+def _seed_historie_jizd():
+    """Jednorázově naimportuje historii jízd 2026 z bundlovaného JSON (data z měsíčních
+    excelů kniha jízd) → Jizda + TachometrStav. Spustí se jen jednou (příznak v Nastaveni).
+    Vozidla páruje dle SPZ; měsíc přepíše jen pokud pro něj ještě jízdy nemá."""
+    import os
+    import json
+    from datetime import datetime
+    from .models import Vozidlo, Jizda, TachometrStav, Nastaveni
+    PRIZNAK = "seed_historie_jizd_v1"
+    cesta = os.path.join(os.path.dirname(__file__), "data", "kniha_jizd_2026.json")
+    try:
+        if Nastaveni.query.get(PRIZNAK) or not os.path.exists(cesta):
+            return
+        with open(cesta, encoding="utf-8") as f:
+            zaznamy = json.load(f)
+        vozidla = {(v.spz or "").replace(" ", "").upper(): v for v in Vozidlo.query.all()}
+        naimport = 0
+        for z in zaznamy:
+            v = vozidla.get((z["spz"] or "").replace(" ", "").upper())
+            if not v:
+                continue
+            rok, mesic = z["rok"], z["mesic"]
+            # přeskoč, pokud už pro tento měsíc jízdy existují (neduplikuj)
+            if Jizda.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).first():
+                continue
+            # počáteční tachometr auta = začátek nejstaršího importovaného měsíce
+            prvni_zac = next((j["zac"] for j in z["jizdy"] if j.get("zac") is not None), None)
+            if prvni_zac is not None and (not v.tachometr_pocatek or v.tachometr_pocatek == 0):
+                v.tachometr_pocatek = int(prvni_zac)
+            if z.get("ridic") and not v.ridic:
+                v.ridic = z["ridic"][:120]
+            for j in z["jizdy"]:
+                d = None
+                if j.get("datum"):
+                    try:
+                        d = datetime.strptime(j["datum"][:10], "%Y-%m-%d").date()
+                    except ValueError:
+                        pass
+                db.session.add(Jizda(vozidlo_id=v.id, rok=rok, mesic=mesic, datum=d,
+                                     odkud=(j.get("odkud") or "")[:300], kam=(j.get("kam") or "")[:300],
+                                     km=float(j.get("km") or 0),
+                                     ucel=(j.get("ucel") or "")[:300], soukroma=False))
+            # stav tachometru na konci měsíce
+            if z.get("tacho_konec") is not None:
+                ts = TachometrStav.query.filter_by(vozidlo_id=v.id, rok=rok, mesic=mesic).first()
+                if ts:
+                    ts.stav_km = int(z["tacho_konec"])
+                else:
+                    db.session.add(TachometrStav(vozidlo_id=v.id, rok=rok, mesic=mesic,
+                                                 stav_km=int(z["tacho_konec"])))
+            naimport += 1
+        db.session.add(Nastaveni(klic=PRIZNAK, hodnota="hotovo"))
+        db.session.commit()
+        print(f"[seed] Historie jízd 2026: naimportováno {naimport} měsíčních záznamů.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[seed] historie jízd: {e}")
 
 
 def _reset_indexace():
